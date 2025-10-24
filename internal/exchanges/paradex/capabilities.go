@@ -31,7 +31,7 @@ func (p *Paradex) SupportsTradingOperations() bool {
 }
 
 func (p *Paradex) SupportsRealTimeData() bool {
-	return false
+	return true
 }
 
 func (p *Paradex) SupportsFundingRates() bool {
