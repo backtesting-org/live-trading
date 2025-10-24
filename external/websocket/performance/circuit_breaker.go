@@ -1,0 +1,60 @@
+package performance
+
+import (
+	"fmt"
+	"sync"
+	"time"
+)
+
+type CircuitBreaker struct {
+	maxFailures  int
+	resetTimeout time.Duration
+	failures     int
+	lastFailure  time.Time
+	state        string // "closed", "open", "half-open"
+	mutex        sync.Mutex
+}
+
+func NewCircuitBreaker(maxFailures int, resetTimeout time.Duration) *CircuitBreaker {
+	return &CircuitBreaker{
+		maxFailures:  maxFailures,
+		resetTimeout: resetTimeout,
+		state:        "closed",
+	}
+}
+
+func (cb *CircuitBreaker) Call(fn func() error) error {
+	cb.mutex.Lock()
+	defer cb.mutex.Unlock()
+
+	if cb.state == "open" {
+		if time.Since(cb.lastFailure) > cb.resetTimeout {
+			cb.state = "half-open"
+			cb.failures = 0
+		} else {
+			return fmt.Errorf("circuit breaker open")
+		}
+	}
+
+	err := fn()
+	if err != nil {
+		cb.failures++
+		cb.lastFailure = time.Now()
+		if cb.failures >= cb.maxFailures {
+			cb.state = "open"
+		}
+		return err
+	}
+
+	if cb.state == "half-open" {
+		cb.state = "closed"
+	}
+	cb.failures = 0
+	return nil
+}
+
+func (cb *CircuitBreaker) GetState() string {
+	cb.mutex.Lock()
+	defer cb.mutex.Unlock()
+	return cb.state
+}
