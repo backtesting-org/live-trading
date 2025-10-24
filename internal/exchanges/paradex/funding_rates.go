@@ -12,7 +12,7 @@ func (p *Paradex) FetchCurrentFundingRates() (map[portfolio.Asset]connector.Fund
 }
 
 func (p *Paradex) FetchFundingRate(asset portfolio.Asset) (*connector.FundingRate, error) {
-	return nil, fmt.Errorf("klines not needed for MM strategy")
+	return nil, fmt.Errorf("funding rate not needed for MM strategy")
 
 }
 
