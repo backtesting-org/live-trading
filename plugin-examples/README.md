@@ -4,7 +4,7 @@ Go runtime plugins for trading strategies using Kronos SDK.
 
 ## Overview
 
-This directory contains plugin versions of trading strategies that can be dynamically loaded into the live-trading platform. Each strategy is compiled as a `.so` file (Linux only) and loaded at runtime.
+This directory contains plugin versions of trading strategies that can be dynamically loaded into the live-trading platform. Each strategy is compiled as a `.so` file and loaded at runtime.
 
 ## Strategies
 
@@ -30,7 +30,7 @@ Kline-based momentum trading strategy that detects price trends.
 
 - **Go 1.24.2** (exact version required for plugin compatibility)
 - **Linux, macOS, or FreeBSD** (Go plugins supported on these platforms)
-- **Kronos SDK** (automatically downloaded)
+- **Kronos SDK**
 
 ## Building Plugins
 
@@ -53,47 +53,6 @@ make test
 ### Clean built plugins:
 ```bash
 make clean
-```
-
-## File Structure
-
-```
-strategy-plugins/
-├── go.mod              # Module definition (depends on Kronos SDK)
-├── Makefile            # Build automation
-├── README.md           # This file
-├── grid/
-│   └── strategy.go     # Grid strategy implementation
-├── momentum/
-│   └── strategy.go     # Momentum strategy implementation
-├── grid.so             # Built grid plugin (after make)
-└── momentum.so         # Built momentum plugin (after make)
-```
-
-## Usage
-
-### In Live-Trading Platform
-
-```go
-import "plugin"
-
-// Load plugin
-plug, err := plugin.Open("./plugins/grid.so")
-if err != nil {
-    log.Fatal(err)
-}
-
-// Get strategy symbol
-symStrategy, err := plug.Lookup("Strategy")
-if err != nil {
-    log.Fatal(err)
-}
-
-// Type assert to strategy interface
-strategy := symStrategy.(*strategy.Strategy)
-
-// Use like any other strategy
-signals, err := strategy.GetSignals()
 ```
 
 ## Development
@@ -163,7 +122,6 @@ Plugins use **only** Kronos SDK interfaces:
 - `github.com/backtesting-org/kronos-sdk/pkg/types/logging` - Logging
 - `github.com/backtesting-org/kronos-sdk/pkg/types/connector` - Exchange types
 
-**No simulator internals** - plugins are completely standalone.
 
 ## Important Notes
 
@@ -173,32 +131,6 @@ Plugins use **only** Kronos SDK interfaces:
 2. **Go Version Must Match** - Plugin and main app must use identical Go version (1.24.2)
 3. **Dependency Versions Must Match** - All shared dependencies must be identical
 4. **Cannot Unload** - Go plugins cannot be unloaded once loaded (limitation of Go)
-
-### Best Practices
-
-1. **Keep it simple** - Complex dependencies increase version mismatch risk
-2. **Use SDK interfaces only** - Don't import internal packages
-3. **Test thoroughly** - Plugins can crash the entire application
-4. **Version carefully** - Breaking interface changes break all plugins
-
-## Testing
-
-Test that plugins compile:
-```bash
-make test
-```
-
-Build and verify size:
-```bash
-make all
-ls -lh *.so
-```
-
-Expected output:
-```
--rwxr-xr-x 1 user user 2.1M grid.so
--rwxr-xr-x 1 user user 2.0M momentum.so
-```
 
 ## Troubleshooting
 
@@ -216,16 +148,3 @@ Expected output:
 - Check that all dependencies are compatible
 - Verify no init() functions that could panic
 - Test compilation with `make test` first
-
-## Contributing
-
-When adding new strategies:
-1. Follow the existing structure
-2. Use only Kronos SDK interfaces
-3. Add build target to Makefile
-4. Document configuration options
-5. Test on Linux
-
-## License
-
-See main repository LICENSE file.
