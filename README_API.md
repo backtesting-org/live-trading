@@ -211,9 +211,48 @@ Response:
 GET /api/v1/strategies/runs?plugin_id=uuid&limit=50&offset=0
 ```
 
+Response:
+```json
+{
+  "message": "Runs retrieved successfully",
+  "data": {
+    "runs": [
+      {
+        "id": "uuid",
+        "plugin_id": "uuid",
+        "status": "stopped",
+        "start_time": "2025-01-01T00:00:00Z",
+        "end_time": "2025-01-01T01:00:00Z",
+        "total_signals": 200,
+        "total_trades": 100,
+        "profit_loss": "150.50",
+        "error_count": 0
+      }
+    ],
+    "count": 1,
+    "limit": 50,
+    "offset": 0
+  }
+}
+```
+
 #### Get Run Statistics
 ```http
 GET /api/v1/strategies/:runId/stats
+```
+
+Response:
+```json
+{
+  "message": "Run stats retrieved successfully",
+  "data": {
+    "total_signals": 150,
+    "executed_signals": 75,
+    "buy_signals": 80,
+    "sell_signals": 70,
+    "error_count": 0
+  }
+}
 ```
 
 ### WebSocket
