@@ -6,13 +6,13 @@ all: grid momentum
 # Build grid plugin
 grid:
 	@echo "Building grid.so plugin..."
-	cd grid && go build -buildmode=plugin -o ../grid.so .
+	go build -buildmode=plugin -o plugin-examples/grid.so ./grid
 	@echo "✓ grid.so built successfully"
 
 # Build momentum plugin
 momentum:
 	@echo "Building momentum.so plugin..."
-	cd momentum && go build -buildmode=plugin -o ../momentum.so .
+	go build -buildmode=plugin -o plugin-examples/momentum.so ./momentum
 	@echo "✓ momentum.so built successfully"
 
 # Clean built plugins
