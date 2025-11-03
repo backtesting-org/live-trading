@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"os/signal"
-	"syscall"
 	"time"
 
 	"github.com/backtesting-org/live-trading/internal/api"
@@ -15,109 +13,38 @@ import (
 	"github.com/backtesting-org/live-trading/internal/config"
 	"github.com/backtesting-org/live-trading/internal/database"
 	"github.com/backtesting-org/live-trading/internal/services"
+	"go.uber.org/fx"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
 
 func main() {
-	// Load configuration
-	cfg, err := config.LoadConfig()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to load configuration: %v\n", err)
-		os.Exit(1)
-	}
-
-	// Initialize logger
-	logger, err := initLogger(cfg.Logging)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to initialize logger: %v\n", err)
-		os.Exit(1)
-	}
-	defer logger.Sync()
-
-	logger.Info("Starting live-trading API server",
-		zap.String("version", "1.0.0"),
-		zap.Int("port", cfg.Server.Port))
-
-	// Initialize database
-	logger.Info("Connecting to database...")
-	repo, err := database.NewRepository(cfg.Database.ConnectionString)
-	if err != nil {
-		logger.Fatal("Failed to connect to database", zap.Error(err))
-	}
-	defer repo.Close()
-
-	// Run migrations
-	ctx := context.Background()
-	logger.Info("Running database migrations...")
-	if err := runMigrations(ctx, repo); err != nil {
-		logger.Fatal("Failed to run migrations", zap.Error(err))
-	}
-
-	// Initialize services
-	eventBus := services.NewEventBus()
-	defer eventBus.Close()
-
-	pluginManager := services.NewPluginManager(repo, logger, cfg.Plugin.Directory)
-	strategyExecutor := services.NewStrategyExecutor(repo, pluginManager, logger, eventBus)
-
-	// Initialize handlers
-	pluginHandler := handlers.NewPluginHandler(pluginManager, logger, cfg.Server.MaxUploadSize)
-	strategyHandler := handlers.NewStrategyHandler(strategyExecutor, logger)
-	wsHandler := websocket.NewHandler(eventBus, logger)
-
-	// Start WebSocket event listener
-	wsHandler.StartEventListener()
-
-	// Setup router
-	router := api.SetupRouter(
-		pluginHandler,
-		strategyHandler,
-		wsHandler,
-		logger,
-		cfg.Server.CORSAllowOrigin,
+	app := fx.New(
+		fx.Provide(
+			config.LoadConfig,
+			provideLogger,
+			provideRepository,
+			services.NewEventBus,
+			services.NewPluginManager,
+			services.NewStrategyExecutor,
+			handlers.NewPluginHandler,
+			handlers.NewStrategyHandler,
+			websocket.NewHandler,
+			provideHTTPServer,
+		),
+		fx.Invoke(
+			runMigrations,
+			startWebSocketListener,
+			registerLifecycle,
+		),
 	)
 
-	// Create HTTP server
-	server := &http.Server{
-		Addr:         fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port),
-		Handler:      router,
-		ReadTimeout:  time.Duration(cfg.Server.ReadTimeout) * time.Second,
-		WriteTimeout: time.Duration(cfg.Server.WriteTimeout) * time.Second,
-	}
-
-	// Start server in a goroutine
-	go func() {
-		logger.Info("Server started",
-			zap.String("address", server.Addr))
-
-		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			logger.Fatal("Failed to start server", zap.Error(err))
-		}
-	}()
-
-	// Wait for interrupt signal to gracefully shut down
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-	<-quit
-
-	logger.Info("Shutting down server...")
-
-	// Graceful shutdown with timeout
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	if err := server.Shutdown(ctx); err != nil {
-		logger.Error("Server forced to shutdown", zap.Error(err))
-	}
-
-	logger.Info("Server stopped")
+	app.Run()
 }
 
-// initLogger initializes the zap logger
-func initLogger(cfg config.LoggingConfig) (*zap.Logger, error) {
+func provideLogger(cfg *config.Config) (*zap.Logger, error) {
 	var level zapcore.Level
-	switch cfg.Level {
+	switch cfg.Logging.Level {
 	case "debug":
 		level = zapcore.DebugLevel
 	case "info":
@@ -133,7 +60,7 @@ func initLogger(cfg config.LoggingConfig) (*zap.Logger, error) {
 	logConfig := zap.Config{
 		Level:       zap.NewAtomicLevelAt(level),
 		Development: false,
-		Encoding:    cfg.Format,
+		Encoding:    cfg.Logging.Format,
 		EncoderConfig: zapcore.EncoderConfig{
 			TimeKey:        "timestamp",
 			LevelKey:       "level",
@@ -148,20 +75,105 @@ func initLogger(cfg config.LoggingConfig) (*zap.Logger, error) {
 			EncodeDuration: zapcore.SecondsDurationEncoder,
 			EncodeCaller:   zapcore.ShortCallerEncoder,
 		},
-		OutputPaths:      []string{cfg.OutputPath},
+		OutputPaths:      []string{cfg.Logging.OutputPath},
 		ErrorOutputPaths: []string{"stderr"},
 	}
 
 	return logConfig.Build()
 }
 
-// runMigrations runs database migrations
-func runMigrations(ctx context.Context, repo *database.Repository) error {
-	// Read migration file
+func provideRepository(cfg *config.Config, logger *zap.Logger) (*database.Repository, error) {
+	logger.Info("Connecting to database...")
+	repo, err := database.NewRepository(cfg.Database.ConnectionString)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to database: %w", err)
+	}
+	return repo, nil
+}
+
+func provideHTTPServer(
+	cfg *config.Config,
+	pluginHandler *handlers.PluginHandler,
+	strategyHandler *handlers.StrategyHandler,
+	wsHandler *websocket.Handler,
+	logger *zap.Logger,
+) *http.Server {
+	router := api.SetupRouter(
+		pluginHandler,
+		strategyHandler,
+		wsHandler,
+		logger,
+		cfg.Server.CORSAllowOrigin,
+	)
+
+	return &http.Server{
+		Addr:         fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port),
+		Handler:      router,
+		ReadTimeout:  time.Duration(cfg.Server.ReadTimeout) * time.Second,
+		WriteTimeout: time.Duration(cfg.Server.WriteTimeout) * time.Second,
+	}
+}
+
+func runMigrations(repo *database.Repository, logger *zap.Logger) error {
+	logger.Info("Running database migrations...")
+
 	migrationSQL, err := os.ReadFile("internal/database/migrations/001_initial_schema.sql")
 	if err != nil {
 		return fmt.Errorf("failed to read migration file: %w", err)
 	}
 
-	return repo.RunMigrations(ctx, string(migrationSQL))
+	ctx := context.Background()
+	if err := repo.RunMigrations(ctx, string(migrationSQL)); err != nil {
+		return fmt.Errorf("failed to run migrations: %w", err)
+	}
+
+	logger.Info("Migrations completed successfully")
+	return nil
+}
+
+func startWebSocketListener(wsHandler *websocket.Handler) {
+	wsHandler.StartEventListener()
+}
+
+func registerLifecycle(
+	lc fx.Lifecycle,
+	server *http.Server,
+	repo *database.Repository,
+	eventBus *services.EventBus,
+	logger *zap.Logger,
+	cfg *config.Config,
+) {
+	lc.Append(fx.Hook{
+		OnStart: func(ctx context.Context) error {
+			go func() {
+				logger.Info("Server started",
+					zap.String("address", server.Addr),
+					zap.String("version", "1.0.0"))
+
+				if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+					logger.Fatal("Failed to start server", zap.Error(err))
+				}
+			}()
+			return nil
+		},
+		OnStop: func(ctx context.Context) error {
+			logger.Info("Shutting down server...")
+
+			shutdownCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+			defer cancel()
+
+			if err := server.Shutdown(shutdownCtx); err != nil {
+				logger.Error("Server forced to shutdown", zap.Error(err))
+			}
+
+			eventBus.Close()
+
+			if err := repo.Close(); err != nil {
+				logger.Error("Failed to close database connection", zap.Error(err))
+			}
+
+			logger.Info("Server stopped")
+			return nil
+		},
+	})
 }

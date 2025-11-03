@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"github.com/backtesting-org/kronos-sdk/pkg/types/strategy"
+	"github.com/backtesting-org/live-trading/internal/config"
 	"github.com/backtesting-org/live-trading/internal/database"
 	"github.com/google/uuid"
 	"go.uber.org/zap"
@@ -33,11 +34,11 @@ type LoadedPlugin struct {
 }
 
 // NewPluginManager creates a new plugin manager
-func NewPluginManager(repo *database.Repository, logger *zap.Logger, pluginDir string) *PluginManager {
+func NewPluginManager(repo *database.Repository, logger *zap.Logger, cfg *config.Config) *PluginManager {
 	return &PluginManager{
 		repo:          repo,
 		logger:        logger,
-		pluginDir:     pluginDir,
+		pluginDir:     cfg.Plugin.Directory,
 		loadedPlugins: make(map[uuid.UUID]*LoadedPlugin),
 	}
 }

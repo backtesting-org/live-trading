@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/backtesting-org/live-trading/internal/config"
 	"github.com/backtesting-org/live-trading/internal/services"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -19,11 +20,11 @@ type PluginHandler struct {
 }
 
 // NewPluginHandler creates a new plugin handler
-func NewPluginHandler(pluginManager *services.PluginManager, logger *zap.Logger, maxUploadSize int64) *PluginHandler {
+func NewPluginHandler(pluginManager *services.PluginManager, logger *zap.Logger, cfg *config.Config) *PluginHandler {
 	return &PluginHandler{
 		pluginManager: pluginManager,
 		logger:        logger,
-		maxUploadSize: maxUploadSize,
+		maxUploadSize: cfg.Server.MaxUploadSize,
 	}
 }
 
