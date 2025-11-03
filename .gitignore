@@ -30,8 +30,21 @@ gen
 go.work
 
 .env
+.env.local
+.env.*.local
 crisis_data
 
+# API server binaries
+bin/
+plugins/*.so
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+tmp/
+temp/
 
 # Config secrets
 config/*/local.yaml
