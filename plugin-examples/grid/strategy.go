@@ -197,5 +197,22 @@ func (gs *GridStrategy) createSellSignal(
 	}
 }
 
+// NewStrategy creates a new strategy instance for plugin loading
+// This is called by the plugin manager to extract metadata
+func NewStrategy() strategy.Strategy {
+	// Create with default config for metadata extraction
+	return NewGridStrategy(
+		nil, // assetStore not needed for metadata
+		nil, // logger not needed for metadata
+		GridConfig{
+			PriceLower:          decimal.NewFromFloat(20000),
+			PriceUpper:          decimal.NewFromFloat(40000),
+			GridStep:            decimal.NewFromFloat(500),
+			OrderSizeQuote:      decimal.NewFromFloat(100),
+			MaxConcurrentOrders: 10,
+		},
+	)
+}
+
 // Plugin export - required for Go plugin system
-var Strategy strategy.Strategy
+var Strategy strategy.Strategy = NewStrategy()

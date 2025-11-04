@@ -108,8 +108,10 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Create triggers for updated_at
+DROP TRIGGER IF EXISTS update_plugin_metadata_updated_at ON plugin_metadata;
 CREATE TRIGGER update_plugin_metadata_updated_at BEFORE UPDATE ON plugin_metadata
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_strategy_runs_updated_at ON strategy_runs;
 CREATE TRIGGER update_strategy_runs_updated_at BEFORE UPDATE ON strategy_runs
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();

@@ -136,5 +136,22 @@ func (ms *MomentumStrategy) createSignal(
 	}
 }
 
+// NewStrategy creates a new strategy instance for plugin loading
+// This is called by the plugin manager to extract metadata
+func NewStrategy() strategy.Strategy {
+	// Create with default config for metadata extraction
+	return NewMomentumStrategy(
+		nil, // assetStore not needed for metadata
+		nil, // logger not needed for metadata
+		MomentumConfig{
+			BuyThreshold:  decimal.NewFromFloat(2.0),
+			SellThreshold: decimal.NewFromFloat(-2.0),
+			OrderQuantity: decimal.NewFromFloat(0.01),
+			KlineInterval: "5m",
+			KlineLimit:    20,
+		},
+	)
+}
+
 // Plugin export - required for Go plugin system
-var Strategy strategy.Strategy
+var Strategy strategy.Strategy = NewStrategy()
