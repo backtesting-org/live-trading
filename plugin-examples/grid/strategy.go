@@ -3,21 +3,18 @@ package main
 import (
 	"time"
 
+	"github.com/backtesting-org/kronos-sdk/pkg/kronos"
 	"github.com/backtesting-org/kronos-sdk/pkg/types/connector"
-	"github.com/backtesting-org/kronos-sdk/pkg/types/logging"
-	"github.com/backtesting-org/kronos-sdk/pkg/types/portfolio"
-	"github.com/backtesting-org/kronos-sdk/pkg/types/portfolio/store"
 	"github.com/backtesting-org/kronos-sdk/pkg/types/strategy"
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
 )
 
-// GridStrategy implements grid trading using only Kronos SDK interfaces
+// GridStrategy implements grid trading using Kronos SDK
 type GridStrategy struct {
 	*strategy.BaseStrategy
-	assetStore store.Store
-	logger     logging.ApplicationLogger
-	config     GridConfig
+	k      *kronos.Kronos
+	config GridConfig
 }
 
 // GridConfig holds grid trading parameters
@@ -30,11 +27,7 @@ type GridConfig struct {
 }
 
 // NewGridStrategy creates a new grid strategy instance
-func NewGridStrategy(
-	assetStore store.Store,
-	logger logging.ApplicationLogger,
-	config GridConfig,
-) *GridStrategy {
+func NewGridStrategy(k *kronos.Kronos, config GridConfig) *GridStrategy {
 	base := strategy.NewBaseStrategy(
 		strategy.StrategyName("Grid Trading"),
 		"Market-neutral grid trading strategy",
@@ -44,8 +37,7 @@ func NewGridStrategy(
 
 	return &GridStrategy{
 		BaseStrategy: base,
-		assetStore:   assetStore,
-		logger:       logger,
+		k:            k,
 		config:       config,
 	}
 }
@@ -56,14 +48,16 @@ func (gs *GridStrategy) GetSignals() ([]*strategy.Signal, error) {
 		return nil, nil
 	}
 
+	gs.k.Log().Info("GridTrading", "", "Scanning grid levels...")
+
 	// Get BTC price
-	asset := portfolio.NewAsset("BTC")
+	asset := gs.k.Asset("BTC")
 	exchange := connector.Bybit
 
-	// Get order book
-	orderBook := gs.assetStore.GetOrderBook(asset, exchange, connector.TypePerpetual)
+	// Get order book using Kronos store
+	orderBook := gs.k.Store().GetOrderBook(asset, exchange, connector.TypePerpetual)
 	if orderBook == nil || len(orderBook.Bids) == 0 || len(orderBook.Asks) == 0 {
-		gs.logger.Info("No orderbook data available for %s on %s", asset.Symbol(), exchange)
+		gs.k.Log().Info("GridTrading", "BTC", "No orderbook data available on %s", exchange)
 		return nil, nil
 	}
 
@@ -71,7 +65,7 @@ func (gs *GridStrategy) GetSignals() ([]*strategy.Signal, error) {
 	currentPrice := orderBook.Bids[0].Price.Add(orderBook.Asks[0].Price).Div(decimal.NewFromInt(2))
 
 	if currentPrice.LessThan(gs.config.PriceLower) || currentPrice.GreaterThan(gs.config.PriceUpper) {
-		gs.logger.Info("Price %s outside grid range [%s-%s]",
+		gs.k.Log().Debug("GridTrading", "BTC", "Price %s outside grid range [%s-%s]",
 			currentPrice.String(),
 			gs.config.PriceLower.String(),
 			gs.config.PriceUpper.String())
@@ -96,7 +90,7 @@ func (gs *GridStrategy) GetSignals() ([]*strategy.Signal, error) {
 		}
 
 		quantity := gs.calculateOrderQuantity(level)
-		signal := gs.createBuySignal(asset, level, exchange, quantity)
+		signal := gs.createBuySignal("BTC", level, exchange, quantity)
 		signals = append(signals, signal)
 		signalsGenerated++
 	}
@@ -108,12 +102,12 @@ func (gs *GridStrategy) GetSignals() ([]*strategy.Signal, error) {
 		}
 
 		quantity := gs.calculateOrderQuantity(level)
-		signal := gs.createSellSignal(asset, level, exchange, quantity)
+		signal := gs.createSellSignal("BTC", level, exchange, quantity)
 		signals = append(signals, signal)
 		signalsGenerated++
 	}
 
-	gs.logger.Info("Generated %d grid signals for %s on %s", len(signals), asset.Symbol(), exchange)
+	gs.k.Log().Info("GridTrading", "BTC", "Generated %d grid signals on %s (price: %s)", len(signals), exchange, currentPrice.StringFixed(2))
 	return signals, nil
 }
 
@@ -153,7 +147,7 @@ func (gs *GridStrategy) calculateOrderQuantity(price decimal.Decimal) decimal.De
 
 // createBuySignal creates a buy signal
 func (gs *GridStrategy) createBuySignal(
-	asset portfolio.Asset,
+	assetSymbol string,
 	price decimal.Decimal,
 	exchange connector.ExchangeName,
 	quantity decimal.Decimal,
@@ -164,7 +158,7 @@ func (gs *GridStrategy) createBuySignal(
 		Actions: []strategy.TradeAction{
 			{
 				Action:   strategy.ActionBuy,
-				Asset:    asset,
+				Asset:    gs.k.Asset(assetSymbol),
 				Exchange: exchange,
 				Quantity: quantity,
 				Price:    price,
@@ -176,7 +170,7 @@ func (gs *GridStrategy) createBuySignal(
 
 // createSellSignal creates a sell signal
 func (gs *GridStrategy) createSellSignal(
-	asset portfolio.Asset,
+	assetSymbol string,
 	price decimal.Decimal,
 	exchange connector.ExchangeName,
 	quantity decimal.Decimal,
@@ -187,7 +181,7 @@ func (gs *GridStrategy) createSellSignal(
 		Actions: []strategy.TradeAction{
 			{
 				Action:   strategy.ActionSell,
-				Asset:    asset,
+				Asset:    gs.k.Asset(assetSymbol),
 				Exchange: exchange,
 				Quantity: quantity,
 				Price:    price,
@@ -200,10 +194,9 @@ func (gs *GridStrategy) createSellSignal(
 // NewStrategy creates a new strategy instance for plugin loading
 // This is called by the plugin manager to extract metadata
 func NewStrategy() strategy.Strategy {
-	// Create with default config for metadata extraction
+	// Create with nil Kronos and default config for metadata extraction
 	return NewGridStrategy(
-		nil, // assetStore not needed for metadata
-		nil, // logger not needed for metadata
+		nil, // Kronos not needed for metadata
 		GridConfig{
 			PriceLower:          decimal.NewFromFloat(20000),
 			PriceUpper:          decimal.NewFromFloat(40000),
