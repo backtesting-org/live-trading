@@ -15,12 +15,15 @@ import (
 
 // StrategyExecutor manages strategy execution lifecycle
 type StrategyExecutor struct {
-	repo          *database.Repository
-	pluginManager *PluginManager
-	logger        *zap.Logger
+	repo            *database.Repository
+	pluginManager   *PluginManager
+	kronosProvider  *KronosProvider
+	tradeExecutor   *TradeExecutor
+	marketDataFeed  *MarketDataFeed
+	logger          *zap.Logger
 	runningStrategies map[uuid.UUID]*RunningStrategy
-	mu            sync.RWMutex
-	eventBus      *EventBus
+	mu              sync.RWMutex
+	eventBus        *EventBus
 }
 
 // RunningStrategy represents an actively running strategy
@@ -49,12 +52,18 @@ type RuntimeStats struct {
 func NewStrategyExecutor(
 	repo *database.Repository,
 	pluginManager *PluginManager,
+	kronosProvider *KronosProvider,
+	tradeExecutor *TradeExecutor,
+	marketDataFeed *MarketDataFeed,
 	logger *zap.Logger,
 	eventBus *EventBus,
 ) *StrategyExecutor {
 	return &StrategyExecutor{
 		repo:              repo,
 		pluginManager:     pluginManager,
+		kronosProvider:    kronosProvider,
+		tradeExecutor:     tradeExecutor,
+		marketDataFeed:    marketDataFeed,
 		logger:            logger,
 		runningStrategies: make(map[uuid.UUID]*RunningStrategy),
 		eventBus:          eventBus,
@@ -269,56 +278,35 @@ func (se *StrategyExecutor) executionLoop(ctx context.Context, running *RunningS
 	}
 }
 
-// processSignals processes trading signals
+// processSignals processes trading signals and executes them
 func (se *StrategyExecutor) processSignals(ctx context.Context, running *RunningStrategy, signals []*strategy.Signal) {
 	for _, signal := range signals {
-		// Store each signal action in database
-		for _, action := range signal.Actions {
-			dbSignal := &database.TradingSignal{
-				ID:         uuid.New(),
-				RunID:      running.RunID,
-				SignalType: string(action.Action),
-				Asset:      action.Asset.Symbol(),
-				Exchange:   string(action.Exchange),
-				Quantity:   action.Quantity,
-				Price:      action.Price,
-				Timestamp:  signal.Timestamp,
-				Executed:   false,
-			}
-
-			if err := se.repo.CreateSignal(ctx, dbSignal); err != nil {
-				se.logger.Error("Failed to store signal", zap.Error(err))
-				continue
-			}
-
-			// Publish signal event
-			se.eventBus.Publish(Event{
-				Type: EventSignalGenerated,
-				Data: map[string]interface{}{
-					"run_id":      running.RunID.String(),
-					"signal_id":   dbSignal.ID.String(),
-					"signal_type": dbSignal.SignalType,
-					"asset":       dbSignal.Asset,
-					"exchange":    dbSignal.Exchange,
-					"quantity":    dbSignal.Quantity.String(),
-					"price":       dbSignal.Price.String(),
-					"timestamp":   dbSignal.Timestamp,
-				},
-			})
-
-			se.logger.Info("Signal generated",
+		// Execute the signal on the exchange
+		if err := se.tradeExecutor.ExecuteSignal(ctx, running.RunID, signal); err != nil {
+			se.logger.Error("Failed to execute signal",
 				zap.String("run_id", running.RunID.String()),
-				zap.String("type", dbSignal.SignalType),
-				zap.String("asset", dbSignal.Asset),
-				zap.String("price", dbSignal.Price.String()))
-		}
-	}
+				zap.String("signal_id", signal.ID.String()),
+				zap.Error(err))
 
-	// Update stats
-	running.Stats.mu.Lock()
-	running.Stats.TotalSignals += int64(len(signals))
-	running.Stats.LastSignal = time.Now()
-	running.Stats.mu.Unlock()
+			running.Stats.mu.Lock()
+			running.Stats.ErrorCount++
+			running.Stats.mu.Unlock()
+
+			continue
+		}
+
+		// Update stats
+		running.Stats.mu.Lock()
+		running.Stats.TotalSignals += 1
+		running.Stats.TotalTrades += int64(len(signal.Actions))
+		running.Stats.LastSignal = time.Now()
+		running.Stats.mu.Unlock()
+
+		se.logger.Info("Signal executed successfully",
+			zap.String("run_id", running.RunID.String()),
+			zap.String("signal_id", signal.ID.String()),
+			zap.Int("actions", len(signal.Actions)))
+	}
 }
 
 // updateMetrics updates runtime metrics

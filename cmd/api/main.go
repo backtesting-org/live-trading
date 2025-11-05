@@ -7,11 +7,18 @@ import (
 	"os"
 	"time"
 
+	"github.com/backtesting-org/kronos-sdk/pkg/types/logging"
+	"github.com/backtesting-org/kronos-sdk/pkg/types/portfolio/store"
 	"github.com/backtesting-org/live-trading/internal/api"
 	"github.com/backtesting-org/live-trading/internal/api/handlers"
 	"github.com/backtesting-org/live-trading/internal/api/websocket"
 	"github.com/backtesting-org/live-trading/internal/config"
+	exchange "github.com/backtesting-org/live-trading/config/exchanges"
 	"github.com/backtesting-org/live-trading/internal/database"
+	"github.com/backtesting-org/live-trading/internal/exchanges/paradex"
+	"github.com/backtesting-org/live-trading/external/exchanges/paradex/adaptor"
+	"github.com/backtesting-org/live-trading/external/exchanges/paradex/requests"
+	websockets "github.com/backtesting-org/live-trading/external/exchanges/paradex/websocket"
 	"github.com/backtesting-org/live-trading/internal/services"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
@@ -24,8 +31,16 @@ func main() {
 			config.LoadConfig,
 			provideLogger,
 			provideRepository,
+			provideParadexConfig,
+			provideParadexConnector,
+			provideStore,
+			provideTradingLogger,
 			services.NewEventBus,
 			services.NewPluginManager,
+			services.NewPositionManager,
+			services.NewKronosProvider,
+			services.NewMarketDataFeed,
+			services.NewTradeExecutor,
 			services.NewStrategyExecutor,
 			handlers.NewPluginHandler,
 			handlers.NewStrategyHandler,
@@ -91,6 +106,56 @@ func provideRepository(cfg *config.Config, logger *zap.Logger) (*database.Reposi
 	return repo, nil
 }
 
+func provideParadexConfig(logger *zap.Logger) (*exchange.Paradex, error) {
+	logger.Info("Loading Paradex configuration...")
+	cfg := &exchange.Paradex{}
+
+	// Try to load config, but don't fail if credentials are missing
+	// This allows the server to start even without Paradex credentials
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Warn("Paradex configuration incomplete - trading will be disabled until credentials are provided",
+				zap.Any("error", r))
+		}
+	}()
+
+	cfg.LoadParadexConfig()
+	return cfg, nil
+}
+
+func provideParadexConnector(
+	cfg *exchange.Paradex,
+	tradingLogger logging.TradingLogger,
+	logger *zap.Logger,
+) (*paradex.Paradex, error) {
+	logger.Info("Initializing Paradex connector...")
+
+	// Create application logger adapter for Paradex
+	appLogger := services.NewApplicationLogger(logger)
+
+	// Create HTTP client
+	client, err := adaptor.NewClient(cfg, appLogger)
+	if err != nil {
+		logger.Warn("Failed to create Paradex client - trading will be disabled", zap.Error(err))
+		// Return nil connector instead of failing - allows server to start
+		return nil, nil
+	}
+
+	// Create Paradex services
+	requestsService := requests.NewService(client, appLogger)
+	wsService := websockets.NewService(client, cfg, appLogger, tradingLogger)
+
+	return paradex.NewParadex(requestsService, wsService, cfg, appLogger, tradingLogger), nil
+}
+
+func provideStore() store.Store {
+	return services.NewMemoryStore()
+}
+
+func provideTradingLogger(logger *zap.Logger) logging.TradingLogger {
+	return services.NewTradingLogger(logger)
+}
+
 func provideHTTPServer(
 	cfg *config.Config,
 	pluginHandler *handlers.PluginHandler,
@@ -140,11 +205,22 @@ func registerLifecycle(
 	server *http.Server,
 	repo *database.Repository,
 	eventBus *services.EventBus,
+	marketDataFeed *services.MarketDataFeed,
 	logger *zap.Logger,
 	cfg *config.Config,
 ) {
 	lc.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
+			// Start market data feed
+			logger.Info("Starting market data feed...")
+			if err := marketDataFeed.Start(); err != nil {
+				logger.Error("Failed to start market data feed", zap.Error(err))
+				// Don't fail startup if market feed fails - may not have Paradex credentials yet
+			} else {
+				logger.Info("Market data feed started successfully")
+			}
+
+			// Start HTTP server
 			go func() {
 				logger.Info("Server started",
 					zap.String("address", server.Addr),
@@ -161,6 +237,10 @@ func registerLifecycle(
 
 			shutdownCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 			defer cancel()
+
+			// Stop market data feed
+			logger.Info("Stopping market data feed...")
+			marketDataFeed.Stop()
 
 			if err := server.Shutdown(shutdownCtx); err != nil {
 				logger.Error("Server forced to shutdown", zap.Error(err))
