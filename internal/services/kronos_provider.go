@@ -5,6 +5,7 @@ import (
 	"github.com/backtesting-org/kronos-sdk/pkg/kronos/analytics"
 	"github.com/backtesting-org/kronos-sdk/pkg/kronos/indicators"
 	"github.com/backtesting-org/kronos-sdk/pkg/kronos/market"
+	"github.com/backtesting-org/kronos-sdk/pkg/kronos/signal"
 	"github.com/backtesting-org/kronos-sdk/pkg/types/logging"
 	"github.com/backtesting-org/kronos-sdk/pkg/types/portfolio/store"
 	"go.uber.org/zap"
@@ -32,10 +33,14 @@ func NewKronosProvider(
 
 // CreateKronos creates a new Kronos context with all services initialized
 func (kp *KronosProvider) CreateKronos() *kronos.Kronos {
+	// Create time provider for live trading
+	timeProvider := NewLiveTimeProvider()
+
 	// Create service instances
 	indicatorService := indicators.NewIndicatorService(kp.store)
 	marketService := market.NewMarketService(kp.store)
 	analyticsService := analytics.NewAnalyticsService(kp.store)
+	signalService := signal.NewService(timeProvider)
 
 	// Create Kronos context
 	k := kronos.NewKronos(
@@ -44,6 +49,7 @@ func (kp *KronosProvider) CreateKronos() *kronos.Kronos {
 		indicatorService,
 		marketService,
 		analyticsService,
+		signalService,
 	)
 
 	kp.logger.Debug("Created new Kronos context")

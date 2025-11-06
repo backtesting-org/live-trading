@@ -8,8 +8,35 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
-	_ "github.com/lib/pq"
+	_ "github.com/jackc/pgx/v5/stdlib"
 )
+
+// hasQuery reports whether the DSN already has a query string
+func hasQuery(dsn string) bool {
+    for i := 0; i < len(dsn); i++ {
+        if dsn[i] == '?' {
+            return true
+        }
+    }
+    return false
+}
+
+// containsParam reports whether the DSN contains a given parameter key
+func containsParam(dsn, key string) bool {
+    // naive but sufficient: look for key= substring
+    needle := key + "="
+    return len(dsn) >= len(needle) && (indexOf(dsn, needle) >= 0)
+}
+
+func indexOf(s, sub string) int {
+    // simple substring search
+    for i := 0; i+len(sub) <= len(s); i++ {
+        if s[i:i+len(sub)] == sub {
+            return i
+        }
+    }
+    return -1
+}
 
 // Repository provides database operations
 type Repository struct {
@@ -18,18 +45,31 @@ type Repository struct {
 
 // NewRepository creates a new database repository
 func NewRepository(connectionString string) (*Repository, error) {
-	db, err := sqlx.Connect("postgres", connectionString)
+    // Ensure simple protocol to avoid server-side prepared statements
+    dsn := connectionString
+    if dsn != "" && !containsParam(dsn, "prefer_simple_protocol") {
+        sep := "?"
+        if hasQuery(dsn) { sep = "&" }
+        dsn = dsn + sep + "prefer_simple_protocol=true"
+    }
+
+    db, err := sqlx.Connect("pgx", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to database: %w", err)
 	}
 
 	// Configure connection pool
-	db.SetMaxOpenConns(25)
-	db.SetMaxIdleConns(5)
+    db.SetMaxOpenConns(25)
+    // Avoid reusing connections to prevent unnamed prepared statement mismatches
+    db.SetMaxIdleConns(0)
 	db.SetConnMaxLifetime(5 * time.Minute)
 	db.SetConnMaxIdleTime(10 * time.Minute)
 
-	return &Repository{db: db}, nil
+	repo := &Repository{db: db}
+
+    // No need to clear prepared statements when using simple protocol
+
+	return repo, nil
 }
 
 // Close closes the database connection
@@ -40,6 +80,14 @@ func (r *Repository) Close() error {
 // Ping verifies the database connection
 func (r *Repository) Ping(ctx context.Context) error {
 	return r.db.PingContext(ctx)
+}
+
+// clearPreparedStatementCache clears all PostgreSQL prepared statements
+// This prevents "bind message supplies X parameters, but prepared statement requires Y" errors
+// that occur when prepared statements are cached with wrong parameter counts
+func (r *Repository) clearPreparedStatementCache(ctx context.Context) error {
+    // No-op under pgx simple protocol; kept for compatibility
+    return nil
 }
 
 // RunMigrations executes database migrations
@@ -64,19 +112,27 @@ func (r *Repository) CreatePlugin(ctx context.Context, plugin *PluginMetadata) e
 		RETURNING created_at, updated_at
 	`
 
-	stmt, err := r.db.PrepareNamedContext(ctx, query)
-	if err != nil {
-		return fmt.Errorf("failed to prepare statement: %w", err)
-	}
-	defer stmt.Close()
-
-	return stmt.GetContext(ctx, plugin, plugin)
+    rows, err := r.db.NamedQueryContext(ctx, query, plugin)
+    if err != nil {
+        return fmt.Errorf("failed to create plugin: %w", err)
+    }
+    defer rows.Close()
+    if rows.Next() {
+        if err := rows.StructScan(plugin); err != nil {
+            return fmt.Errorf("failed to scan created plugin: %w", err)
+        }
+    }
+    return nil
 }
 
 // GetPlugin retrieves a plugin by ID
 func (r *Repository) GetPlugin(ctx context.Context, id uuid.UUID) (*PluginMetadata, error) {
 	var plugin PluginMetadata
-	query := `SELECT * FROM plugin_metadata WHERE id = $1 AND deleted_at IS NULL`
+	query := `
+		SELECT id, name, description, plugin_path, risk_level, type, version,
+		       parameters, created_at, updated_at, deleted_at, created_by
+		FROM plugin_metadata WHERE id = $1 AND deleted_at IS NULL
+	`
 
 	err := r.db.GetContext(ctx, &plugin, query, id)
 	if err == sql.ErrNoRows {
@@ -92,7 +148,11 @@ func (r *Repository) GetPlugin(ctx context.Context, id uuid.UUID) (*PluginMetada
 // GetPluginByName retrieves a plugin by name
 func (r *Repository) GetPluginByName(ctx context.Context, name string) (*PluginMetadata, error) {
 	var plugin PluginMetadata
-	query := `SELECT * FROM plugin_metadata WHERE name = $1 AND deleted_at IS NULL`
+	query := `
+		SELECT id, name, description, plugin_path, risk_level, type, version,
+		       parameters, created_at, updated_at, deleted_at, created_by
+		FROM plugin_metadata WHERE name = $1 AND deleted_at IS NULL
+	`
 
 	err := r.db.GetContext(ctx, &plugin, query, name)
 	if err == sql.ErrNoRows {
@@ -109,7 +169,9 @@ func (r *Repository) GetPluginByName(ctx context.Context, name string) (*PluginM
 func (r *Repository) ListPlugins(ctx context.Context, limit, offset int) ([]PluginMetadata, error) {
 	var plugins []PluginMetadata
 	query := `
-		SELECT * FROM plugin_metadata
+		SELECT id, name, description, plugin_path, risk_level, type, version,
+		       parameters, created_at, updated_at, deleted_at, created_by
+		FROM plugin_metadata
 		WHERE deleted_at IS NULL
 		ORDER BY created_at DESC
 		LIMIT $1 OFFSET $2
@@ -187,20 +249,25 @@ func (r *Repository) CreateConfig(ctx context.Context, config *StrategyConfig) e
 		RETURNING created_at
 	`
 
-	stmt, err := r.db.PrepareNamedContext(ctx, query)
-	if err != nil {
-		return fmt.Errorf("failed to prepare statement: %w", err)
-	}
-	defer stmt.Close()
-
-	return stmt.GetContext(ctx, config, config)
+    rows, err := r.db.NamedQueryContext(ctx, query, config)
+    if err != nil {
+        return fmt.Errorf("failed to create config: %w", err)
+    }
+    defer rows.Close()
+    if rows.Next() {
+        if err := rows.StructScan(config); err != nil {
+            return fmt.Errorf("failed to scan created config: %w", err)
+        }
+    }
+    return nil
 }
 
 // GetLatestConfig retrieves the latest configuration for a plugin
 func (r *Repository) GetLatestConfig(ctx context.Context, pluginID uuid.UUID) (*StrategyConfig, error) {
 	var config StrategyConfig
 	query := `
-		SELECT * FROM strategy_configs
+		SELECT id, plugin_id, version, config_data, created_at, created_by
+		FROM strategy_configs
 		WHERE plugin_id = $1
 		ORDER BY version DESC
 		LIMIT 1
@@ -220,7 +287,10 @@ func (r *Repository) GetLatestConfig(ctx context.Context, pluginID uuid.UUID) (*
 // GetConfigByVersion retrieves a specific version of configuration
 func (r *Repository) GetConfigByVersion(ctx context.Context, pluginID uuid.UUID, version int) (*StrategyConfig, error) {
 	var config StrategyConfig
-	query := `SELECT * FROM strategy_configs WHERE plugin_id = $1 AND version = $2`
+	query := `
+		SELECT id, plugin_id, version, config_data, created_at, created_by
+		FROM strategy_configs WHERE plugin_id = $1 AND version = $2
+	`
 
 	err := r.db.GetContext(ctx, &config, query, pluginID, version)
 	if err == sql.ErrNoRows {
@@ -236,7 +306,10 @@ func (r *Repository) GetConfigByVersion(ctx context.Context, pluginID uuid.UUID,
 // ListConfigs retrieves all configurations for a plugin
 func (r *Repository) ListConfigs(ctx context.Context, pluginID uuid.UUID) ([]StrategyConfig, error) {
 	var configs []StrategyConfig
-	query := `SELECT * FROM strategy_configs WHERE plugin_id = $1 ORDER BY version DESC`
+	query := `
+		SELECT id, plugin_id, version, config_data, created_at, created_by
+		FROM strategy_configs WHERE plugin_id = $1 ORDER BY version DESC
+	`
 
 	err := r.db.SelectContext(ctx, &configs, query, pluginID)
 	if err != nil {
@@ -259,19 +332,28 @@ func (r *Repository) CreateRun(ctx context.Context, run *StrategyRun) error {
 		RETURNING created_at, updated_at
 	`
 
-	stmt, err := r.db.PrepareNamedContext(ctx, query)
-	if err != nil {
-		return fmt.Errorf("failed to prepare statement: %w", err)
-	}
-	defer stmt.Close()
-
-	return stmt.GetContext(ctx, run, run)
+    rows, err := r.db.NamedQueryContext(ctx, query, run)
+    if err != nil {
+        return fmt.Errorf("failed to create run: %w", err)
+    }
+    defer rows.Close()
+    if rows.Next() {
+        if err := rows.StructScan(run); err != nil {
+            return fmt.Errorf("failed to scan created run: %w", err)
+        }
+    }
+    return nil
 }
 
 // GetRun retrieves a run by ID
 func (r *Repository) GetRun(ctx context.Context, id uuid.UUID) (*StrategyRun, error) {
 	var run StrategyRun
-	query := `SELECT * FROM strategy_runs WHERE id = $1`
+	query := `
+		SELECT id, plugin_id, config_id, status, start_time, end_time,
+		       total_signals, total_trades, profit_loss, error_count,
+		       error_message, cpu_usage, memory_usage, created_at, updated_at
+		FROM strategy_runs WHERE id = $1
+	`
 
 	err := r.db.GetContext(ctx, &run, query, id)
 	if err == sql.ErrNoRows {
@@ -286,27 +368,32 @@ func (r *Repository) GetRun(ctx context.Context, id uuid.UUID) (*StrategyRun, er
 
 // ListRunsByPlugin retrieves all runs for a plugin
 func (r *Repository) ListRunsByPlugin(ctx context.Context, pluginID uuid.UUID, limit, offset int) ([]StrategyRun, error) {
-	var runs []StrategyRun
-	query := `
-		SELECT * FROM strategy_runs
-		WHERE plugin_id = $1
-		ORDER BY start_time DESC
-		LIMIT $2 OFFSET $3
-	`
+    var runs []StrategyRun
+    query := `
+        SELECT id, plugin_id, config_id, status, start_time, end_time,
+               total_signals, total_trades, profit_loss, error_count,
+               error_message, cpu_usage, memory_usage, created_at, updated_at
+        FROM strategy_runs
+        WHERE plugin_id = $1
+        ORDER BY start_time DESC
+        LIMIT $2 OFFSET $3
+    `
 
-	err := r.db.SelectContext(ctx, &runs, query, pluginID, limit, offset)
-	if err != nil {
-		return nil, fmt.Errorf("failed to list runs: %w", err)
-	}
+    if err := r.db.SelectContext(ctx, &runs, query, pluginID, limit, offset); err != nil {
+        return nil, fmt.Errorf("failed to list runs: %w", err)
+    }
 
-	return runs, nil
+    return runs, nil
 }
 
 // GetActiveRun retrieves the currently active run for a plugin
 func (r *Repository) GetActiveRun(ctx context.Context, pluginID uuid.UUID) (*StrategyRun, error) {
 	var run StrategyRun
 	query := `
-		SELECT * FROM strategy_runs
+		SELECT id, plugin_id, config_id, status, start_time, end_time,
+		       total_signals, total_trades, profit_loss, error_count,
+		       error_message, cpu_usage, memory_usage, created_at, updated_at
+		FROM strategy_runs
 		WHERE plugin_id = $1 AND status = $2
 		ORDER BY start_time DESC
 		LIMIT 1
@@ -380,7 +467,9 @@ func (r *Repository) CreateSignal(ctx context.Context, signal *TradingSignal) er
 func (r *Repository) ListSignalsByRun(ctx context.Context, runID uuid.UUID, limit, offset int) ([]TradingSignal, error) {
 	var signals []TradingSignal
 	query := `
-		SELECT * FROM trading_signals
+		SELECT id, run_id, signal_type, asset, exchange, quantity, price,
+		       timestamp, executed, order_id
+		FROM trading_signals
 		WHERE run_id = $1
 		ORDER BY timestamp DESC
 		LIMIT $2 OFFSET $3
@@ -444,7 +533,8 @@ func (r *Repository) CreateLog(ctx context.Context, log *ExecutionLog) error {
 func (r *Repository) ListLogsByRun(ctx context.Context, runID uuid.UUID, limit, offset int) ([]ExecutionLog, error) {
 	var logs []ExecutionLog
 	query := `
-		SELECT * FROM execution_logs
+		SELECT id, run_id, level, message, metadata, timestamp
+		FROM execution_logs
 		WHERE run_id = $1
 		ORDER BY timestamp DESC
 		LIMIT $2 OFFSET $3

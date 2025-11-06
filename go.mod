@@ -3,7 +3,7 @@ module github.com/backtesting-org/live-trading
 go 1.24.2
 
 require (
-	github.com/backtesting-org/kronos-sdk v0.0.0-20251105060616-72c1aff76142
+	github.com/backtesting-org/kronos-sdk v0.0.0-20251105091250-786449a91baa
 	github.com/gin-contrib/cors v1.7.6
 	github.com/gin-gonic/gin v1.11.0
 	github.com/go-openapi/runtime v0.29.0
@@ -68,6 +68,10 @@ require (
 	github.com/goccy/go-yaml v1.18.0 // indirect
 	github.com/google/go-querystring v1.1.0 // indirect
 	github.com/holiman/uint256 v1.3.2 // indirect
+	github.com/jackc/pgpassfile v1.0.0 // indirect
+	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
+	github.com/jackc/pgx/v5 v5.7.6 // indirect
+	github.com/jackc/puddle/v2 v2.2.2 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/klauspost/cpuid/v2 v2.3.0 // indirect
