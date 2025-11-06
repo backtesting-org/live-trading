@@ -119,6 +119,9 @@ func (te *TradeExecutor) executeTradeAction(
 	// Update position manager
 	te.positionManager.UpdatePosition(action, orderID)
 
+	// Record trade for P&L tracking (exit price is the action price for now)
+	te.positionManager.RecordTrade(runID.String(), action, action.Price)
+
 	// Log successful execution
 	te.logExecution(ctx, runID, "info",
 		fmt.Sprintf("Executed %s %s on %s, order: %s",

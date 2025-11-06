@@ -403,7 +403,27 @@ func (se *StrategyExecutor) ListRuns(ctx context.Context, pluginID uuid.UUID, li
 
 // GetRunStats retrieves detailed statistics for a run
 func (se *StrategyExecutor) GetRunStats(ctx context.Context, runID uuid.UUID) (map[string]interface{}, error) {
-	return se.repo.GetRunStats(ctx, runID)
+	// Get base stats from database
+	stats, err := se.repo.GetRunStats(ctx, runID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Add P&L and win rate from PositionManager
+	perf := se.tradeExecutor.positionManager.GetPerformance(runID.String())
+	winRate := se.tradeExecutor.positionManager.GetWinRate(runID.String())
+
+	// Enhance stats with P&L metrics
+	stats["realized_pnl"] = perf.RealizedPnL.String()
+	stats["unrealized_pnl"] = perf.UnrealizedPnL.String()
+	stats["winning_trades"] = perf.WinningTrades
+	stats["losing_trades"] = perf.LosingTrades
+	stats["win_rate"] = winRate.StringFixed(2) + "%" // e.g., "65.50%"
+	stats["total_volume"] = perf.TotalVolume.String()
+	stats["largest_win"] = perf.LargestWin.String()
+	stats["largest_loss"] = perf.LargestLoss.String()
+
+	return stats, nil
 }
 
 // ExecutionStatus represents the current status of a strategy execution

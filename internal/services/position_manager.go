@@ -18,10 +18,23 @@ type Position struct {
 	OrderID    string
 }
 
+// TradePerformance tracks P&L metrics per strategy run
+type TradePerformance struct {
+	RunID           string
+	RealizedPnL     decimal.Decimal // Total realized profit/loss
+	UnrealizedPnL   decimal.Decimal // Current unrealized P&L
+	WinningTrades   int             // Number of profitable trades
+	LosingTrades    int             // Number of losing trades
+	TotalVolume     decimal.Decimal // Total trading volume
+	LargestWin      decimal.Decimal // Largest winning trade
+	LargestLoss     decimal.Decimal // Largest losing trade
+}
+
 // PositionManager manages open positions and enforces risk limits
 type PositionManager struct {
 	mu        sync.RWMutex
-	positions map[string]*Position // key: asset+exchange
+	positions map[string]*Position            // key: asset+exchange
+	performance map[string]*TradePerformance  // key: run_id
 	logger    *zap.Logger
 
 	// Risk limits
@@ -34,6 +47,7 @@ type PositionManager struct {
 func NewPositionManager(logger *zap.Logger) *PositionManager {
 	return &PositionManager{
 		positions:           make(map[string]*Position),
+		performance:         make(map[string]*TradePerformance),
 		logger:              logger,
 		maxPositionSize:     decimal.NewFromFloat(10000), // $10k max per position
 		maxTotalExposure:    decimal.NewFromFloat(50000), // $50k total exposure
@@ -197,4 +211,122 @@ func (pm *PositionManager) SetRiskLimits(
 		zap.String("max_position", maxPositionSize.String()),
 		zap.String("max_exposure", maxTotalExposure.String()),
 		zap.Int("max_trades", maxConcurrentTrades))
+}
+
+// RecordTrade records a completed trade and updates P&L metrics
+func (pm *PositionManager) RecordTrade(runID string, action strategy.TradeAction, exitPrice decimal.Decimal) {
+	pm.mu.Lock()
+	defer pm.mu.Unlock()
+
+	// Initialize performance tracking for this run if needed
+	if pm.performance[runID] == nil {
+		pm.performance[runID] = &TradePerformance{
+			RunID:           runID,
+			RealizedPnL:     decimal.Zero,
+			UnrealizedPnL:   decimal.Zero,
+			WinningTrades:   0,
+			LosingTrades:    0,
+			TotalVolume:     decimal.Zero,
+			LargestWin:      decimal.Zero,
+			LargestLoss:     decimal.Zero,
+		}
+	}
+
+	perf := pm.performance[runID]
+
+	// Calculate P&L for this trade
+	var pnl decimal.Decimal
+	if action.Action == strategy.ActionSell {
+		// For sells, we're closing a position - calculate realized P&L
+		pnl = exitPrice.Sub(action.Price).Mul(action.Quantity)
+
+		// Update realized P&L
+		perf.RealizedPnL = perf.RealizedPnL.Add(pnl)
+
+		// Track win/loss
+		if pnl.GreaterThan(decimal.Zero) {
+			perf.WinningTrades++
+			if pnl.GreaterThan(perf.LargestWin) {
+				perf.LargestWin = pnl
+			}
+		} else if pnl.LessThan(decimal.Zero) {
+			perf.LosingTrades++
+			if pnl.LessThan(perf.LargestLoss) {
+				perf.LargestLoss = pnl
+			}
+		}
+	}
+
+	// Update total volume
+	tradeVolume := action.Quantity.Mul(action.Price)
+	perf.TotalVolume = perf.TotalVolume.Add(tradeVolume)
+
+	pm.logger.Debug("Trade recorded",
+		zap.String("run_id", runID),
+		zap.String("action", string(action.Action)),
+		zap.String("pnl", pnl.String()),
+		zap.String("total_pnl", perf.RealizedPnL.String()))
+}
+
+// GetPerformance retrieves performance metrics for a strategy run
+func (pm *PositionManager) GetPerformance(runID string) *TradePerformance {
+	pm.mu.RLock()
+	defer pm.mu.RUnlock()
+
+	if perf, exists := pm.performance[runID]; exists {
+		// Return a copy
+		return &TradePerformance{
+			RunID:           perf.RunID,
+			RealizedPnL:     perf.RealizedPnL,
+			UnrealizedPnL:   perf.UnrealizedPnL,
+			WinningTrades:   perf.WinningTrades,
+			LosingTrades:    perf.LosingTrades,
+			TotalVolume:     perf.TotalVolume,
+			LargestWin:      perf.LargestWin,
+			LargestLoss:     perf.LargestLoss,
+		}
+	}
+
+	// Return empty performance if not found
+	return &TradePerformance{
+		RunID:           runID,
+		RealizedPnL:     decimal.Zero,
+		UnrealizedPnL:   decimal.Zero,
+		WinningTrades:   0,
+		LosingTrades:    0,
+		TotalVolume:     decimal.Zero,
+		LargestWin:      decimal.Zero,
+		LargestLoss:     decimal.Zero,
+	}
+}
+
+// GetWinRate calculates the win rate percentage for a strategy run
+func (pm *PositionManager) GetWinRate(runID string) decimal.Decimal {
+	pm.mu.RLock()
+	defer pm.mu.RUnlock()
+
+	perf, exists := pm.performance[runID]
+	if !exists {
+		return decimal.Zero
+	}
+
+	totalTrades := perf.WinningTrades + perf.LosingTrades
+	if totalTrades == 0 {
+		return decimal.Zero
+	}
+
+	winRate := decimal.NewFromInt(int64(perf.WinningTrades)).
+		Div(decimal.NewFromInt(int64(totalTrades))).
+		Mul(decimal.NewFromInt(100))
+
+	return winRate
+}
+
+// ClearPerformance clears performance data for a strategy run (when it stops)
+func (pm *PositionManager) ClearPerformance(runID string) {
+	pm.mu.Lock()
+	defer pm.mu.Unlock()
+
+	delete(pm.performance, runID)
+	pm.logger.Debug("Performance data cleared", zap.String("run_id", runID))
 }
