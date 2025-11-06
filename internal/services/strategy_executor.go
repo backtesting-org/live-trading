@@ -84,11 +84,19 @@ func (se *StrategyExecutor) StartStrategy(ctx context.Context, pluginID uuid.UUI
 		return uuid.Nil, fmt.Errorf("strategy is already running with run ID: %s", activeRun.ID)
 	}
 
-	// Instantiate strategy from plugin
-	strat, err := se.pluginManager.InstantiateStrategy(ctx, pluginID)
+    // Instantiate strategy from plugin
+    strat, err := se.pluginManager.InstantiateStrategy(ctx, pluginID)
 	if err != nil {
 		return uuid.Nil, fmt.Errorf("failed to instantiate strategy: %w", err)
 	}
+
+    // Inject Kronos if strategy supports it
+    if se.kronosProvider != nil {
+        if aware, ok := strat.(KronosAware); ok {
+            k := se.kronosProvider.CreateKronos()
+            aware.SetKronos(k)
+        }
+    }
 
 	// Create run record
 	run := &database.StrategyRun{

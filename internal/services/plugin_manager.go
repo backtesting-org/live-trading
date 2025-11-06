@@ -8,6 +8,7 @@ import (
 	"plugin"
 	"sync"
 
+	"github.com/backtesting-org/kronos-sdk/pkg/kronos"
 	"github.com/backtesting-org/kronos-sdk/pkg/types/strategy"
 	"github.com/backtesting-org/live-trading/internal/config"
 	"github.com/backtesting-org/live-trading/internal/database"
@@ -31,6 +32,11 @@ type LoadedPlugin struct {
 	Plugin       *plugin.Plugin
 	StrategyFunc func() strategy.Strategy
 	Metadata     *database.PluginMetadata
+}
+
+// KronosAware is implemented by strategies that accept a Kronos context injection
+type KronosAware interface {
+    SetKronos(*kronos.Kronos)
 }
 
 // NewPluginManager creates a new plugin manager
