@@ -26,6 +26,10 @@ type MarketDataFeed struct {
 	// Assets to monitor
 	assets    []portfolio.Asset
 	exchanges []connector.ExchangeName
+
+    // instrumentation
+    obUpdates   int64
+    klineUpdates int64
 }
 
 // NewMarketDataFeed creates a new market data feed service
@@ -57,14 +61,31 @@ func (mdf *MarketDataFeed) Start() error {
 		return fmt.Errorf("paradex connector not available")
 	}
 
-	// Start WebSocket connection
-	if err := mdf.paradexConnector.StartWebSocket(mdf.ctx); err != nil {
+    // Start WebSocket connection
+    if err := mdf.paradexConnector.StartWebSocket(mdf.ctx); err != nil {
 		return err
 	}
 
-	// Start periodic market data updates
+    // Wait briefly for WS to be connected before subscriptions begin
+    connectedWaitUntil := time.Now().Add(5 * time.Second)
+    for !mdf.paradexConnector.IsWebSocketConnected() && time.Now().Before(connectedWaitUntil) {
+        time.Sleep(100 * time.Millisecond)
+    }
+    if mdf.paradexConnector.IsWebSocketConnected() {
+        mdf.logger.Info("Paradex websocket connected")
+    } else {
+        mdf.logger.Warn("Paradex websocket not yet connected; subscriptions will retry when connected")
+    }
+
+    // Start consumers for WS-driven updates (orderbooks, klines from trades)
+    mdf.wg.Add(3)
+    go mdf.consumeOrderbookUpdates()
+    go mdf.consumeKlineUpdates()
+    go mdf.consumeErrorUpdates()
+
+    // Start periodic market data updates (REST fallbacks)
 	// Assets will be added dynamically when strategies start
-	mdf.wg.Add(1)
+    mdf.wg.Add(1)
 	go mdf.updateMarketDataLoop()
 
 	mdf.logger.Info("Market data feed started successfully")
@@ -76,7 +97,7 @@ func (mdf *MarketDataFeed) Stop() {
 	mdf.logger.Info("Stopping market data feed...")
 	mdf.cancel()
 
-	// Stop WebSocket
+    // Stop WebSocket
 	if err := mdf.paradexConnector.StopWebSocket(); err != nil {
 		mdf.logger.Error("Error stopping WebSocket", zap.Error(err))
 	}
@@ -135,18 +156,8 @@ func (mdf *MarketDataFeed) updateMarketData() {
 
 // updateKlines fetches and stores recent klines
 func (mdf *MarketDataFeed) updateKlines(asset portfolio.Asset, exchange connector.ExchangeName) error {
-	// Klines not implemented in Paradex yet - skip for now
-	// intervals := []string{"1m", "5m", "15m", "1h"}
-	// for _, interval := range intervals {
-	// 	klines, err := mdf.paradexConnector.FetchKlines(asset.Symbol(), interval, 100)
-	// 	if err != nil {
-	// 		return err
-	// 	}
-	// 	for _, kline := range klines {
-	// 		mdf.store.UpdateKline(asset, exchange, kline)
-	// 	}
-	// }
-	return nil
+    // Historical klines via REST are not supported on Paradex yet; runtime klines are built from trades via WS
+    return nil
 }
 
 // updateOrderBook fetches and stores current orderbook
@@ -180,6 +191,119 @@ func (mdf *MarketDataFeed) AddAsset(asset portfolio.Asset) {
 		}
 	}
 
-	mdf.assets = append(mdf.assets, asset)
-	mdf.logger.Info("Added asset to market feed", zap.String("asset", asset.Symbol()))
+    mdf.assets = append(mdf.assets, asset)
+    mdf.logger.Info("Added asset to market feed", zap.String("asset", asset.Symbol()))
+
+    // Subscribe to trades (for klines) and orderbook via WS
+    if mdf.paradexConnector != nil {
+        if err := mdf.subscribeForAsset(asset); err != nil {
+            // If WS not connected, retry in background until success or context canceled
+            mdf.logger.Warn("Deferring subscriptions until websocket connects", zap.String("asset", asset.Symbol()), zap.Error(err))
+            go mdf.retrySubscribeWhenConnected(asset)
+        }
+    }
+}
+
+func (mdf *MarketDataFeed) subscribeForAsset(asset portfolio.Asset) error {
+    if !mdf.paradexConnector.IsWebSocketConnected() {
+        return fmt.Errorf("websocket not connected")
+    }
+    if err := mdf.paradexConnector.SubscribeTrades(asset, connector.TypePerpetual); err != nil {
+        return err
+    }
+    if err := mdf.paradexConnector.SubscribeOrderBook(asset, connector.TypePerpetual); err != nil {
+        return err
+    }
+    // SubscribeKlines ensures trade sub exists; included for clarity
+    _ = mdf.paradexConnector.SubscribeKlines(asset, "5m")
+    return nil
+}
+
+func (mdf *MarketDataFeed) retrySubscribeWhenConnected(asset portfolio.Asset) {
+    ticker := time.NewTicker(500 * time.Millisecond)
+    defer ticker.Stop()
+    for {
+        select {
+        case <-mdf.ctx.Done():
+            return
+        case <-ticker.C:
+            if mdf.paradexConnector.IsWebSocketConnected() {
+                if err := mdf.subscribeForAsset(asset); err != nil {
+                    mdf.logger.Warn("Subscription retry failed", zap.String("asset", asset.Symbol()), zap.Error(err))
+                    continue
+                }
+                mdf.logger.Info("Subscribed to Paradex streams for asset", zap.String("asset", asset.Symbol()))
+                return
+            }
+        }
+    }
+}
+
+// consumeOrderbookUpdates streams WS orderbooks into the store
+func (mdf *MarketDataFeed) consumeOrderbookUpdates() {
+    defer mdf.wg.Done()
+    ch := mdf.paradexConnector.OrderBookUpdates()
+    lastLog := time.Now()
+    for {
+        select {
+        case <-mdf.ctx.Done():
+            return
+        case ob, ok := <-ch:
+            if !ok {
+                return
+            }
+            // Use Paradex exchange name
+            mdf.store.UpdateOrderBook(ob.Asset, connector.Paradex, connector.TypePerpetual, ob)
+            mdf.obUpdates++
+            if time.Since(lastLog) > 30*time.Second {
+                mdf.logger.Info("Orderbook stream healthy",
+                    zap.Int64("updates_total", mdf.obUpdates),
+                    zap.String("last_asset", ob.Asset.Symbol()))
+                lastLog = time.Now()
+            }
+        }
+    }
+}
+
+// consumeKlineUpdates streams WS-built klines into the store
+func (mdf *MarketDataFeed) consumeKlineUpdates() {
+    defer mdf.wg.Done()
+    ch := mdf.paradexConnector.KlineUpdates()
+    lastLog := time.Now()
+    for {
+        select {
+        case <-mdf.ctx.Done():
+            return
+        case k, ok := <-ch:
+            if !ok {
+                return
+            }
+            mdf.store.UpdateKline(portfolio.NewAsset(k.Symbol), connector.Paradex, k)
+            mdf.klineUpdates++
+            if time.Since(lastLog) > 30*time.Second {
+                mdf.logger.Info("Kline stream healthy",
+                    zap.Int64("updates_total", mdf.klineUpdates),
+                    zap.String("last_symbol", k.Symbol),
+                    zap.String("interval", k.Interval))
+                lastLog = time.Now()
+            }
+        }
+    }
+}
+
+// consumeErrorUpdates logs websocket errors from Paradex service
+func (mdf *MarketDataFeed) consumeErrorUpdates() {
+    defer mdf.wg.Done()
+    ch := mdf.paradexConnector.ErrorChannel()
+    for {
+        select {
+        case <-mdf.ctx.Done():
+            return
+        case err, ok := <-ch:
+            if !ok {
+                return
+            }
+            mdf.logger.Error("Paradex websocket error", zap.Error(err))
+        }
+    }
 }

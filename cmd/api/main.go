@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/backtesting-org/kronos-sdk/pkg/types/logging"
@@ -139,6 +140,19 @@ func provideParadexConnector(
 		logger.Warn("Failed to create Paradex client - trading will be disabled", zap.Error(err))
 		// Return nil connector instead of failing - allows server to start
 		return nil, nil
+	}
+
+	// Onboard the account if not already onboarded
+	logger.Info("Onboarding Paradex account...")
+	if err := client.Onboard(context.Background()); err != nil {
+		// Check if it's already onboarded
+		if !strings.Contains(err.Error(), "ALREADY_ONBOARDED") && !strings.Contains(err.Error(), "already onboarded") {
+			logger.Warn("Failed to onboard Paradex account - will attempt to continue", zap.Error(err))
+		} else {
+			logger.Info("Paradex account already onboarded")
+		}
+	} else {
+		logger.Info("Paradex account onboarded successfully")
 	}
 
 	// Create Paradex services

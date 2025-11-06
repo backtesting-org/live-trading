@@ -95,6 +95,11 @@ func (se *StrategyExecutor) StartStrategy(ctx context.Context, pluginID uuid.UUI
         if aware, ok := strat.(KronosAware); ok {
             k := se.kronosProvider.CreateKronos()
             aware.SetKronos(k)
+
+            // Register core assets for market data feed (Paradex-only support)
+            if se.marketDataFeed != nil {
+                se.marketDataFeed.AddAsset(k.Asset("BTC"))
+            }
         }
     }
 
