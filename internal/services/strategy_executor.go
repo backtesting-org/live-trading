@@ -109,7 +109,7 @@ func (se *StrategyExecutor) StartStrategy(ctx context.Context, pluginID uuid.UUI
 		PluginID:  pluginID,
 		ConfigID:  configID,
 		Status:    database.RunStatusRunning,
-		StartTime: time.Now(),
+		StartTime: time.Now().UTC(),
 	}
 
 	if err := se.repo.CreateRun(ctx, run); err != nil {
@@ -187,7 +187,7 @@ func (se *StrategyExecutor) StopStrategy(ctx context.Context, runID uuid.UUID) e
 		return fmt.Errorf("failed to get run: %w", err)
 	}
 
-	endTime := time.Now()
+	endTime := time.Now().UTC()
 	run.Status = database.RunStatusStopped
 	run.EndTime = &endTime
 	run.TotalSignals = running.Stats.TotalSignals
@@ -236,7 +236,7 @@ func (se *StrategyExecutor) executionLoop(ctx context.Context, running *RunningS
 			updateCtx := context.Background()
 			run, err := se.repo.GetRun(updateCtx, running.RunID)
 			if err == nil {
-				endTime := time.Now()
+				endTime := time.Now().UTC()
 				run.Status = database.RunStatusError
 				errorMsg := fmt.Sprintf("panic: %v", r)
 				run.ErrorMessage = &errorMsg
@@ -416,10 +416,43 @@ func (se *StrategyExecutor) ListRuns(ctx context.Context, pluginID uuid.UUID, li
 
 // GetRunStats retrieves detailed statistics for a run
 func (se *StrategyExecutor) GetRunStats(ctx context.Context, runID uuid.UUID) (map[string]interface{}, error) {
+	// Get run from database
+	run, err := se.repo.GetRun(ctx, runID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get run: %w", err)
+	}
+
 	// Get base stats from database
 	stats, err := se.repo.GetRunStats(ctx, runID)
 	if err != nil {
 		return nil, err
+	}
+
+	// Add run metadata
+	stats["run_id"] = runID.String()
+	stats["total_trades"] = run.TotalTrades
+	stats["error_count"] = run.ErrorCount
+	stats["cpu_usage"] = run.CPUUsage
+	stats["memory_usage"] = run.MemoryUsage
+
+	// Calculate uptime
+	var uptimeSeconds int64
+	if run.EndTime != nil {
+		uptimeSeconds = int64(run.EndTime.Sub(run.StartTime).Seconds())
+	} else {
+		uptimeSeconds = int64(time.Since(run.StartTime).Seconds())
+	}
+	stats["uptime_seconds"] = uptimeSeconds
+
+	// Add last_signal from live stats if running
+	se.mu.RLock()
+	running, exists := se.runningStrategies[runID]
+	se.mu.RUnlock()
+
+	if exists && !running.Stats.LastSignal.IsZero() {
+		stats["last_signal"] = running.Stats.LastSignal.Format(time.RFC3339)
+	} else {
+		stats["last_signal"] = nil
 	}
 
 	// Add P&L and win rate from PositionManager

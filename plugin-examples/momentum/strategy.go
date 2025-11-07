@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/backtesting-org/kronos-sdk/pkg/kronos"
@@ -73,7 +74,7 @@ func (ms *MomentumStrategy) GetSignals() ([]*strategy.Signal, error) {
 	}
 
     if ms.k != nil {
-        ms.k.Log().Info("Momentum", "", "Generated %d momentum signals", len(signals))
+        ms.k.Log().Info("Momentum", "", fmt.Sprintf("Generated %d momentum signals", len(signals)))
     }
 	return signals, nil
 }
@@ -102,16 +103,16 @@ func (ms *MomentumStrategy) generateMomentumSignal(
 	priceChange := current.Close.Sub(previous.Close).Div(previous.Close).Mul(decimal.NewFromInt(100))
 
     if ms.k != nil {
-        ms.k.Log().Debug("Momentum", assetSymbol, "Price change on %s: %s%%", exchange, priceChange.StringFixed(2))
+        ms.k.Log().Debug("Momentum", assetSymbol, fmt.Sprintf("Price change on %s: %s%%", exchange, priceChange.StringFixed(2)))
     }
 
 	// Generate buy signal on positive momentum
 	if priceChange.GreaterThan(ms.config.BuyThreshold) {
         if ms.k != nil {
-            ms.k.Log().Opportunity("Momentum", assetSymbol, "BUY signal on %s: %s%% change (threshold: %s%%)",
+            ms.k.Log().Opportunity("Momentum", assetSymbol, fmt.Sprintf("BUY signal on %s: %s%% change (threshold: %s%%)",
 			exchange,
 			priceChange.StringFixed(2),
-            ms.config.BuyThreshold.StringFixed(2))
+            ms.config.BuyThreshold.StringFixed(2)))
         }
 		return ms.createSignal(strategy.ActionBuy, assetSymbol, exchange, ms.config.OrderQuantity, current.Close)
 	}
@@ -119,10 +120,10 @@ func (ms *MomentumStrategy) generateMomentumSignal(
 	// Generate sell signal on negative momentum
     if priceChange.LessThan(ms.config.SellThreshold) {
         if ms.k != nil {
-            ms.k.Log().Opportunity("Momentum", assetSymbol, "SELL signal on %s: %s%% change (threshold: %s%%)",
+            ms.k.Log().Opportunity("Momentum", assetSymbol, fmt.Sprintf("SELL signal on %s: %s%% change (threshold: %s%%)",
 			exchange,
 			priceChange.StringFixed(2),
-            ms.config.SellThreshold.StringFixed(2))
+            ms.config.SellThreshold.StringFixed(2)))
         }
 		return ms.createSignal(strategy.ActionSell, assetSymbol, exchange, ms.config.OrderQuantity, current.Close)
 	}

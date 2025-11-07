@@ -194,9 +194,9 @@ func (s *Service) processTradeData(channel string, data json.RawMessage) error {
 	var paradexTrade struct {
 		ID        string `json:"id"`
 		Price     string `json:"price"`
-		Quantity  string `json:"quantity"`
+		Size      string `json:"size"`
 		Side      string `json:"side"`
-		Timestamp int64  `json:"timestamp"`
+		Timestamp int64  `json:"created_at"`
 	}
 
 	if err := json.Unmarshal(data, &paradexTrade); err != nil {
@@ -209,8 +209,8 @@ func (s *Service) processTradeData(channel string, data json.RawMessage) error {
 		return nil
 	}
 
-	if paradexTrade.Quantity == "" {
-		s.applicationLogger.Debug("Skipping trade with empty quantity for %s", symbol)
+	if paradexTrade.Size == "" {
+		s.applicationLogger.Debug("Skipping trade with empty size for %s", symbol)
 		return nil
 	}
 
@@ -219,9 +219,9 @@ func (s *Service) processTradeData(channel string, data json.RawMessage) error {
 		return fmt.Errorf("invalid price '%s': %w", paradexTrade.Price, err)
 	}
 
-	quantity, err := decimal.NewFromString(paradexTrade.Quantity)
+	quantity, err := decimal.NewFromString(paradexTrade.Size)
 	if err != nil {
-		return fmt.Errorf("invalid quantity '%s': %w", paradexTrade.Quantity, err)
+		return fmt.Errorf("invalid size '%s': %w", paradexTrade.Size, err)
 	}
 
 	update := TradeUpdate{
