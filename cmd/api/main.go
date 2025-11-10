@@ -11,6 +11,7 @@ import (
 	"github.com/backtesting-org/kronos-sdk/pkg/types/connector"
 	"github.com/backtesting-org/kronos-sdk/pkg/types/logging"
 	"github.com/backtesting-org/kronos-sdk/pkg/types/portfolio/store"
+	"github.com/backtesting-org/kronos-sdk/pkg/types/temporal"
 	exchange "github.com/backtesting-org/live-trading/config/exchanges"
 	"github.com/backtesting-org/live-trading/external/exchanges/paradex"
 	"github.com/backtesting-org/live-trading/external/exchanges/paradex/adaptor"
@@ -35,6 +36,7 @@ func main() {
 			provideParadexConfig,
 			provideConnectorRegistry,
 			provideConnector,
+			provideTimeProvider,
 			provideStore,
 			provideTradingLogger,
 			services.NewEventBus,
@@ -131,6 +133,7 @@ func provideConnectorRegistry(
 	paradexConfig *exchange.Paradex,
 	tradingLogger logging.TradingLogger,
 	logger *zap.Logger,
+	timeProvider temporal.TimeProvider,
 ) *connectors.Registry {
 	logger.Info("Initializing connector registry...")
 
@@ -139,12 +142,12 @@ func provideConnectorRegistry(
 
 	// Register Paradex connector provider (exchange-specific code in external/)
 	registry.Register("paradex", func() (connector.Connector, error) {
-		return paradex.NewConnector(paradexConfig, appLogger, tradingLogger)
+		return paradex.NewConnector(paradexConfig, appLogger, tradingLogger, timeProvider)
 	})
 
 	// Future exchanges can be registered here:
 	// registry.Register("binance", func() (connector.Connector, error) {
-	//     return binance.NewConnector(binanceConfig, appLogger, tradingLogger)
+	//     return binance.NewConnector(binanceConfig, appLogger, tradingLogger, timeProvider)
 	// })
 
 	logger.Info("Connector registry initialized", zap.Strings("exchanges", registry.ListExchanges()))
@@ -203,11 +206,16 @@ func onboardParadexAccount(logger *zap.Logger) error {
 	return nil
 }
 
+func provideTimeProvider() temporal.TimeProvider {
+	return services.NewLiveTimeProvider()
+}
+
 func provideMarketDataFeed(
 	conn connector.Connector,
 	store store.Store,
 	cfg *config.Config,
 	logger *zap.Logger,
+	timeProvider temporal.TimeProvider,
 ) *services.MarketDataFeed {
 	// Map config exchange name to connector.ExchangeName
 	var exchangeName connector.ExchangeName
@@ -217,7 +225,7 @@ func provideMarketDataFeed(
 	default:
 		exchangeName = connector.Paradex
 	}
-	return services.NewMarketDataFeed(conn, store, logger, exchangeName)
+	return services.NewMarketDataFeed(conn, store, logger, exchangeName, timeProvider)
 }
 
 func provideTradeExecutor(
@@ -226,12 +234,13 @@ func provideTradeExecutor(
 	repo *database.Repository,
 	eventBus *services.EventBus,
 	logger *zap.Logger,
+	timeProvider temporal.TimeProvider,
 ) *services.TradeExecutor {
-	return services.NewTradeExecutor(conn, positionManager, repo, eventBus, logger)
+	return services.NewTradeExecutor(conn, positionManager, repo, eventBus, logger, timeProvider)
 }
 
-func provideStore() store.Store {
-	return services.NewMemoryStore()
+func provideStore(timeProvider temporal.TimeProvider) store.Store {
+	return services.NewMemoryStore(timeProvider)
 }
 
 func provideTradingLogger(logger *zap.Logger) logging.TradingLogger {
@@ -245,6 +254,7 @@ func provideHTTPServer(
 	ordersHandler *handlers.OrdersHandler,
 	wsHandler *websocket.Handler,
 	logger *zap.Logger,
+	timeProvider temporal.TimeProvider,
 ) *http.Server {
 	router := api.SetupRouter(
 		pluginHandler,
@@ -253,6 +263,7 @@ func provideHTTPServer(
 		wsHandler,
 		logger,
 		cfg.Server.CORSAllowOrigin,
+		timeProvider,
 	)
 
 	return &http.Server{

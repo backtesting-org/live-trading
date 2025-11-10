@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/backtesting-org/kronos-sdk/pkg/types/strategy"
+	"github.com/backtesting-org/kronos-sdk/pkg/types/temporal"
 	"github.com/backtesting-org/live-trading/internal/database"
 	"github.com/google/uuid"
 	"go.uber.org/zap"
@@ -24,6 +25,7 @@ type StrategyExecutor struct {
 	runningStrategies map[uuid.UUID]*RunningStrategy
 	mu              sync.RWMutex
 	eventBus        *EventBus
+	timeProvider    temporal.TimeProvider
 }
 
 // RunningStrategy represents an actively running strategy
@@ -57,6 +59,7 @@ func NewStrategyExecutor(
 	marketDataFeed *MarketDataFeed,
 	logger *zap.Logger,
 	eventBus *EventBus,
+	timeProvider temporal.TimeProvider,
 ) *StrategyExecutor {
 	return &StrategyExecutor{
 		repo:              repo,
@@ -67,6 +70,7 @@ func NewStrategyExecutor(
 		logger:            logger,
 		runningStrategies: make(map[uuid.UUID]*RunningStrategy),
 		eventBus:          eventBus,
+		timeProvider:      timeProvider,
 	}
 }
 
@@ -109,7 +113,7 @@ func (se *StrategyExecutor) StartStrategy(ctx context.Context, pluginID uuid.UUI
 		PluginID:  pluginID,
 		ConfigID:  configID,
 		Status:    database.RunStatusRunning,
-		StartTime: time.Now().UTC(),
+		StartTime: se.timeProvider.Now().UTC(),
 	}
 
 	if err := se.repo.CreateRun(ctx, run); err != nil {
@@ -135,7 +139,7 @@ func (se *StrategyExecutor) StartStrategy(ctx context.Context, pluginID uuid.UUI
 		PluginID:   pluginID,
 		Strategy:   strat,
 		CancelFunc: cancel,
-		StartTime:  time.Now(),
+		StartTime:  se.timeProvider.Now(),
 		Stats:      &RuntimeStats{},
 		ErrorChan:  make(chan error, 10),
 	}
@@ -151,7 +155,7 @@ func (se *StrategyExecutor) StartStrategy(ctx context.Context, pluginID uuid.UUI
 		Data: map[string]interface{}{
 			"run_id":    run.ID.String(),
 			"plugin_id": pluginID.String(),
-			"timestamp": time.Now(),
+			"timestamp": se.timeProvider.Now(),
 		},
 	})
 
@@ -187,7 +191,7 @@ func (se *StrategyExecutor) StopStrategy(ctx context.Context, runID uuid.UUID) e
 		return fmt.Errorf("failed to get run: %w", err)
 	}
 
-	endTime := time.Now().UTC()
+	endTime := se.timeProvider.Now().UTC()
 	run.Status = database.RunStatusStopped
 	run.EndTime = &endTime
 	run.TotalSignals = running.Stats.TotalSignals
@@ -205,7 +209,7 @@ func (se *StrategyExecutor) StopStrategy(ctx context.Context, runID uuid.UUID) e
 		Type: EventStrategyStopped,
 		Data: map[string]interface{}{
 			"run_id":    runID.String(),
-			"timestamp": time.Now(),
+			"timestamp": se.timeProvider.Now(),
 			"stats": map[string]interface{}{
 				"total_signals": running.Stats.TotalSignals,
 				"total_trades":  running.Stats.TotalTrades,
@@ -223,7 +227,7 @@ func (se *StrategyExecutor) StopStrategy(ctx context.Context, runID uuid.UUID) e
 
 // executionLoop runs the strategy signal generation loop
 func (se *StrategyExecutor) executionLoop(ctx context.Context, running *RunningStrategy) {
-	ticker := time.NewTicker(5 * time.Second) // Generate signals every 5 seconds
+	ticker := se.timeProvider.NewTicker(5 * time.Second) // Generate signals every 5 seconds
 	defer ticker.Stop()
 
 	defer func() {
@@ -236,7 +240,7 @@ func (se *StrategyExecutor) executionLoop(ctx context.Context, running *RunningS
 			updateCtx := context.Background()
 			run, err := se.repo.GetRun(updateCtx, running.RunID)
 			if err == nil {
-				endTime := time.Now().UTC()
+				endTime := se.timeProvider.Now().UTC()
 				run.Status = database.RunStatusError
 				errorMsg := fmt.Sprintf("panic: %v", r)
 				run.ErrorMessage = &errorMsg
@@ -252,7 +256,7 @@ func (se *StrategyExecutor) executionLoop(ctx context.Context, running *RunningS
 			se.logger.Info("Execution loop cancelled", zap.String("run_id", running.RunID.String()))
 			return
 
-		case <-ticker.C:
+		case <-ticker.C():
 			// Get signals from strategy
 			signals, err := running.Strategy.GetSignals()
 			if err != nil {
@@ -297,7 +301,7 @@ func (se *StrategyExecutor) processSignals(ctx context.Context, running *Running
 		// Increment signal counter when signal is generated
 		running.Stats.mu.Lock()
 		running.Stats.TotalSignals += 1
-		running.Stats.LastSignal = time.Now()
+		running.Stats.LastSignal = se.timeProvider.Now()
 		running.Stats.mu.Unlock()
 
 		// Execute the signal on the exchange
@@ -341,7 +345,7 @@ func (se *StrategyExecutor) updateMetrics(ctx context.Context, running *RunningS
 	running.Stats.mu.Unlock()
 
 	// Save to database every minute
-	if time.Since(running.StartTime)%(1*time.Minute) < 5*time.Second {
+	if se.timeProvider.Since(running.StartTime)%(1*time.Minute) < 5*time.Second {
 		run, err := se.repo.GetRun(ctx, running.RunID)
 		if err != nil {
 			se.logger.Error("Failed to get run for metrics update", zap.Error(err))
@@ -368,7 +372,7 @@ func (se *StrategyExecutor) logError(ctx context.Context, runID uuid.UUID, err e
 		Level:     database.LogLevelError,
 		Message:   err.Error(),
 		Metadata:  database.LogMetadata{},
-		Timestamp: time.Now(),
+		Timestamp: se.timeProvider.Now(),
 	}
 
 	if err := se.repo.CreateLog(ctx, log); err != nil {
@@ -447,7 +451,7 @@ func (se *StrategyExecutor) GetRunStats(ctx context.Context, runID uuid.UUID) (m
 	if run.EndTime != nil {
 		uptimeSeconds = int64(run.EndTime.Sub(run.StartTime).Seconds())
 	} else {
-		uptimeSeconds = int64(time.Since(run.StartTime).Seconds())
+		uptimeSeconds = int64(se.timeProvider.Since(run.StartTime).Seconds())
 	}
 	stats["uptime_seconds"] = uptimeSeconds
 

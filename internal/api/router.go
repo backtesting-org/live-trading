@@ -3,6 +3,7 @@ package api
 import (
 	"time"
 
+	"github.com/backtesting-org/kronos-sdk/pkg/types/temporal"
 	"github.com/backtesting-org/live-trading/internal/api/handlers"
 	"github.com/backtesting-org/live-trading/internal/api/websocket"
 	"github.com/gin-contrib/cors"
@@ -18,6 +19,7 @@ func SetupRouter(
 	wsHandler *websocket.Handler,
 	logger *zap.Logger,
 	corsAllowOrigin string,
+	timeProvider temporal.TimeProvider,
 ) *gin.Engine {
 	// Set Gin mode
 	gin.SetMode(gin.ReleaseMode)
@@ -26,7 +28,7 @@ func SetupRouter(
 
 	// Middleware
 	router.Use(gin.Recovery())
-	router.Use(LoggerMiddleware(logger))
+	router.Use(LoggerMiddleware(logger, timeProvider))
 
 	// CORS configuration
 	config := cors.Config{
@@ -94,15 +96,15 @@ func SetupRouter(
 }
 
 // LoggerMiddleware creates a Gin middleware for logging
-func LoggerMiddleware(logger *zap.Logger) gin.HandlerFunc {
+func LoggerMiddleware(logger *zap.Logger, timeProvider temporal.TimeProvider) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		start := time.Now()
+		start := timeProvider.Now()
 		path := c.Request.URL.Path
 		query := c.Request.URL.RawQuery
 
 		c.Next()
 
-		end := time.Now()
+		end := timeProvider.Now()
 		latency := end.Sub(start)
 
 		if len(c.Errors) > 0 {
