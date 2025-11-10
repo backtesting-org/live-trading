@@ -91,8 +91,8 @@ func (s *Service) GetAccountInfo(ctx context.Context) (*GetAccountsInfoResponse,
 	// Make raw HTTP request to work around SDK bug with Kind field
 	// The SDK expects Kind to be a nested struct, but API returns it as a string
 
-	// Get the base URL from the API transport
-	baseURL := "https://api.prod.paradex.trade/v1"
+	// Get the base URL from the client
+	baseURL := s.client.GetBaseURL()
 
 	// Create HTTP request
 	req, err := http.NewRequestWithContext(ctx, "GET", baseURL+"/account/info", nil)

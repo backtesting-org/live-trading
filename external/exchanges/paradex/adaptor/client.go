@@ -27,12 +27,18 @@ type Client struct {
 	systemConfig      *models.ResponsesSystemConfigResponse
 	jwtToken          string
 	tokenExpiry       time.Time
+	useTestnet        bool
 	mu                sync.RWMutex
 }
 
 func NewClient(cfg *exchange.Paradex, logger logging.ApplicationLogger) (*Client, error) {
+	host := "api.prod.paradex.trade"
+	if cfg.UseTestnet {
+		host = "api.testnet.paradex.trade"
+	}
+
 	clientConfig := client.DefaultTransportConfig().
-		WithHost("api.prod.paradex.trade").
+		WithHost(host).
 		WithBasePath("/v1").
 		WithSchemes([]string{"https"})
 	api := client.NewHTTPClientWithConfig(nil, clientConfig)
@@ -60,6 +66,7 @@ func NewClient(cfg *exchange.Paradex, logger logging.ApplicationLogger) (*Client
 		dexAccountAddress: dexAccountAddr,
 		ethereumAddress:   ethAddress,
 		systemConfig:      systemConfig,
+		useTestnet:        cfg.UseTestnet,
 	}, nil
 }
 
@@ -157,6 +164,13 @@ func (c *Client) GetDexPublicKey() string                                { retur
 func (c *Client) GetEthereumAddress() string                             { return c.ethereumAddress }
 func (c *Client) GetSystemConfig() *models.ResponsesSystemConfigResponse { return c.systemConfig }
 func (c *Client) API() *client.ParadexRESTAPI                            { return c.api }
+func (c *Client) IsTestnet() bool                                        { return c.useTestnet }
+func (c *Client) GetBaseURL() string {
+	if c.useTestnet {
+		return "https://api.testnet.paradex.trade/v1"
+	}
+	return "https://api.prod.paradex.trade/v1"
+}
 
 func convertParadexChainID(paradexChainID string) string {
 	switch paradexChainID {
