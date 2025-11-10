@@ -7,44 +7,44 @@ import (
 	"time"
 
 	"github.com/backtesting-org/kronos-sdk/pkg/types/connector"
+	"github.com/backtesting-org/kronos-sdk/pkg/types/portfolio"
 	"github.com/backtesting-org/kronos-sdk/pkg/types/strategy"
 	"github.com/backtesting-org/live-trading/internal/database"
-	"github.com/backtesting-org/live-trading/internal/exchanges/paradex"
 	"github.com/google/uuid"
 	"go.uber.org/zap"
 )
 
 // TradeExecutor executes trading signals on exchanges
 type TradeExecutor struct {
-	paradexConnector *paradex.Paradex
-	positionManager  *PositionManager
-	repo             *database.Repository
-	eventBus         *EventBus
-	logger           *zap.Logger
+	connector       connector.Connector
+	positionManager *PositionManager
+	repo            *database.Repository
+	eventBus        *EventBus
+	logger          *zap.Logger
 }
 
 // NewTradeExecutor creates a new trade executor service
 func NewTradeExecutor(
-	paradexConnector *paradex.Paradex,
+	conn connector.Connector,
 	positionManager *PositionManager,
 	repo *database.Repository,
 	eventBus *EventBus,
 	logger *zap.Logger,
 ) *TradeExecutor {
 	return &TradeExecutor{
-		paradexConnector: paradexConnector,
-		positionManager:  positionManager,
-		repo:             repo,
-		eventBus:         eventBus,
-		logger:           logger,
+		connector:       conn,
+		positionManager: positionManager,
+		repo:            repo,
+		eventBus:        eventBus,
+		logger:          logger,
 	}
 }
 
 // ExecuteSignal processes a trading signal and executes it on the exchange
 func (te *TradeExecutor) ExecuteSignal(ctx context.Context, runID uuid.UUID, signal *strategy.Signal) error {
 	// Check if connector is available
-	if te.paradexConnector == nil {
-		return fmt.Errorf("paradex connector not available - cannot execute trades")
+	if te.connector == nil {
+		return fmt.Errorf("connector not available - cannot execute trades")
 	}
 
 	te.logger.Info("Executing signal",
@@ -105,17 +105,8 @@ func (te *TradeExecutor) executeTradeAction(
 		return "", err
 	}
 
-	// Execute based on action type and exchange
-	var orderID string
-	var err error
-
-	switch action.Exchange {
-	case connector.Paradex:
-		orderID, err = te.executeOnParadex(ctx, action)
-	default:
-		return "", fmt.Errorf("unsupported exchange: %s", action.Exchange)
-	}
-
+	// Execute the trade using the connector
+	orderID, err := te.executeTradeOnExchange(ctx, action)
 	if err != nil {
 		return "", err
 	}
@@ -144,26 +135,34 @@ func (te *TradeExecutor) executeTradeAction(
 	return orderID, nil
 }
 
-// executeOnParadex executes a trade on Paradex exchange
-func (te *TradeExecutor) executeOnParadex(ctx context.Context, action strategy.TradeAction) (string, error) {
-	var resp *connector.OrderResponse
-	var err error
-
+// executeTradeOnExchange executes a trade on the configured exchange
+func (te *TradeExecutor) executeTradeOnExchange(ctx context.Context, action strategy.TradeAction) (string, error) {
 	side := connector.OrderSideBuy
 	if action.Action == strategy.ActionSell {
 		side = connector.OrderSideSell
 	}
 
-	// Convert asset symbol to Paradex perpetual format (BTC -> BTC-USD-PERP)
-	symbol := te.paradexConnector.GetPerpSymbol(action.Asset)
+	// Get the exchange-specific symbol format
+	symbol := te.getExchangeSymbol(action.Asset)
 
 	// Use market order for simplicity
-	resp, err = te.paradexConnector.PlaceMarketOrder(symbol, side, action.Quantity)
+	resp, err := te.connector.PlaceMarketOrder(symbol, side, action.Quantity)
 	if err != nil {
 		return "", err
 	}
 
 	return resp.OrderID, nil
+}
+
+// getExchangeSymbol gets the exchange-specific symbol format for an asset
+func (te *TradeExecutor) getExchangeSymbol(asset portfolio.Asset) string {
+	// For exchanges that support the GetPerpSymbol method, use it
+	if symbolGetter, ok := te.connector.(interface{ GetPerpSymbol(portfolio.Asset) string }); ok {
+		return symbolGetter.GetPerpSymbol(asset)
+	}
+
+	// Default: use the asset symbol as-is
+	return asset.Symbol()
 }
 
 // storeSignal saves a trading signal to the database with order IDs

@@ -1,26 +1,25 @@
 # Live Trading API
 
-A live trading platform that supports automated trading strategies with real-time market data integration.
+A live trading platform that supports automated trading strategies with real-time market data integration across multiple exchanges.
 
 ## Features
 
-- Plugin-based trading strategy system
-- Real-time market data feed via Paradex WebSocket
-- PostgreSQL database for strategy runs, signals, and logs
-- RESTful API for strategy management
-- WebSocket support for real-time updates
+- **Exchange-Agnostic Architecture** - Supports multiple exchanges via adapter pattern
+- **Plugin-Based Strategy System** - Load custom trading strategies dynamically
+- **Real-Time Market Data** - Live price feeds, orderbooks, and klines
+- **PostgreSQL Database** - Persistent storage for runs, signals, and logs
+- **RESTful API** - Comprehensive strategy and account management
+- **WebSocket Support** - Real-time updates and notifications
+
+## Supported Exchanges
+
+- ✅ **Paradex** - Perpetual futures on Starknet
+- 🔜 **Bybit** - Coming soon
 
 ## Prerequisites
 
 - Go 1.24 or higher
 - PostgreSQL database (Neon recommended)
-- **Paradex Account Requirements:**
-  - **IMPORTANT:** Your Ethereum wallet must contain at least **0.001 ETH or 5 USDC** on one of these mainnet chains:
-    - Ethereum mainnet
-    - Arbitrum
-    - Base
-  - This is a Paradex anti-spam requirement for account onboarding
-  - Testnet funds (e.g., Sepolia ETH) will **NOT** work
 
 ## Setup
 
@@ -35,29 +34,55 @@ cp .env.example .env
 Configure the following required variables:
 
 ```env
-# Database Configuration
+# Database Configuration (Required)
 LIVE_TRADING_DATABASE_CONNECTION_STRING="postgresql://user:pass@host/db?sslmode=require"
+```
 
-# Paradex Configuration
+**Exchange-Specific Configuration:**
+
+Each exchange requires its own configuration. See `.env.example` for details.
+
+<details>
+<summary><b>Paradex Configuration</b></summary>
+
+```env
 PARADEX_BASE_URL=https://api.testnet.paradex.trade/v1
 PARADEX_WEBSOCKET_URL=wss://ws.api.testnet.paradex.trade/v1
 PARADEX_STARKNET_RPC=https://rpc.api.testnet.paradex.trade/
-PARADEX_ACCOUNT_ADDRESS=0x... # Your Paradex L2 address
-PARADEX_ETH_PRIVATE_KEY=... # Your Ethereum private key
-PARADEX_L2_PRIVATE_KEY=0x... # Your StarkNet private key
+PARADEX_ACCOUNT_ADDRESS=your_starknet_testnet_account_address_here
+PARADEX_ETH_PRIVATE_KEY=your_ethereum_private_key_here
+PARADEX_L2_PRIVATE_KEY=your_starknet_l2_private_key_here
 PARADEX_USE_TESTNET=true
+PARADEX_TIMEOUT=30s
 ```
+</details>
 
-### 2. Fund Your Ethereum Wallet
+<details>
+<summary><b>Binance Configuration</b> (Coming Soon)</summary>
 
-Before starting the server, ensure your Ethereum wallet (the one corresponding to `PARADEX_ETH_PRIVATE_KEY`) has:
+```env
+BINANCE_API_KEY=your_api_key_here
+BINANCE_API_SECRET=your_api_secret_here
+BINANCE_USE_TESTNET=true
+```
+</details>
+
+### 2. Exchange Account Setup
+
+#### Paradex
+
+Before starting the server with Paradex, ensure your Ethereum wallet (corresponding to `PARADEX_ETH_PRIVATE_KEY`) has:
 - At least **0.001 ETH** OR **5 USDC**
 - On **Ethereum, Arbitrum, or Base mainnet**
 
-Without sufficient funds, the server will fail to onboard to Paradex with the error:
+Without sufficient funds, onboarding will fail with:
 ```
 INSUFFICIENT_MIN_CHAIN_BALANCE
 ```
+
+#### Other Exchanges
+
+See exchange-specific documentation in `.env.example`
 
 ### 3. Build and Run
 
@@ -107,17 +132,31 @@ WS /ws
 
 ```
 .
-├── cmd/api/                  # Application entry point
-├── config/                   # Configuration files
-├── internal/
-│   ├── api/                  # HTTP handlers and routes
-│   ├── database/             # Database repository
-│   ├── services/             # Business logic
-│   └── exchanges/            # Exchange integrations
+├── cmd/api/                     # Application entry point
+├── config/
+│   └── exchanges/               # Exchange-specific configurations
+├── internal/                    # ✅ Exchange-agnostic core
+│   ├── api/                     # HTTP handlers and routes
+│   ├── connectors/              # Connector registry (generic)
+│   ├── database/                # Database repository
+│   └── services/                # Business logic (uses connector.Connector)
 ├── external/
-│   └── exchanges/paradex/    # Paradex client SDK
-└── plugins/                  # Trading strategy plugins
+│   └── exchanges/               # ✅ Exchange-specific implementations
+│       └── paradex/             # Paradex connector & client
+│           ├── connector.go     # Implements connector.Connector
+│           ├── provider.go      # Factory function
+│           ├── adaptor/         # HTTP client
+│           ├── requests/        # API requests
+│           └── websocket/       # WebSocket client
+└── plugins/                     # Trading strategy plugins
 ```
+
+### Architecture Principles
+
+1. **`internal/`** - Exchange-agnostic, uses only `connector.Connector` interface
+2. **`external/exchanges/`** - Exchange-specific implementations
+3. **`cmd/api/main.go`** - Registers connectors with the registry
+4. **Zero dependencies** - `internal/` never imports `external/exchanges/`
 
 ### Building Plugins
 
@@ -127,9 +166,52 @@ Strategy plugins must be built with the exact same version of `kronos-sdk` as th
 make plugins
 ```
 
+## Adding a New Exchange
+
+To add support for a new exchange (e.g., Binance):
+
+1. **Create exchange adapter**:
+   ```bash
+   mkdir -p external/exchanges/binance
+   ```
+
+2. **Implement `connector.Connector` interface**:
+   ```go
+   // external/exchanges/binance/connector.go
+   package binance
+
+   type Binance struct { ... }
+
+   func (b *Binance) FetchKlines(...) ([]connector.Kline, error) { ... }
+   func (b *Binance) PlaceMarketOrder(...) (*connector.OrderResponse, error) { ... }
+   // ... implement all connector.Connector methods
+   ```
+
+3. **Create provider function**:
+   ```go
+   // external/exchanges/binance/provider.go
+   func NewConnector(config *Config, ...) (connector.Connector, error) {
+       return &Binance{...}, nil
+   }
+   ```
+
+4. **Register in `cmd/api/main.go`**:
+   ```go
+   registry.Register("binance", func() (connector.Connector, error) {
+       return binance.NewConnector(binanceConfig, appLogger, tradingLogger)
+   })
+   ```
+
+5. **Update `.env`**:
+   ```env
+   LIVE_TRADING_EXCHANGE_NAME=binance
+   ```
+
+**That's it!** No changes to `internal/` required.
+
 ## Troubleshooting
 
-### Paradex Onboarding Fails
+### Exchange Onboarding Fails (Paradex)
 
 **Error:** `NOT_ONBOARDED` or `INSUFFICIENT_MIN_CHAIN_BALANCE`
 

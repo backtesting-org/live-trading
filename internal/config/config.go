@@ -14,6 +14,12 @@ type Config struct {
 	Database DatabaseConfig `mapstructure:"database"`
 	Plugin   PluginConfig   `mapstructure:"plugin"`
 	Logging  LoggingConfig  `mapstructure:"logging"`
+	Exchange ExchangeConfig `mapstructure:"exchange"`
+}
+
+// ExchangeConfig represents exchange connector configuration
+type ExchangeConfig struct {
+	Name string `mapstructure:"name"` // e.g., "paradex", "binance", "bybit"
 }
 
 // ServerConfig represents server configuration
@@ -101,6 +107,9 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("logging.level", "info")
 	v.SetDefault("logging.format", "json")
 	v.SetDefault("logging.output_path", "stdout")
+
+	// Exchange defaults
+	v.SetDefault("exchange.name", "paradex")
 }
 
 // validateConfig validates the configuration
