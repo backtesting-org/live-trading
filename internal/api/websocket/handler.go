@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/backtesting-org/kronos-sdk/pkg/types/temporal"
 	"github.com/backtesting-org/live-trading/internal/services"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
@@ -27,6 +28,7 @@ type Handler struct {
 	logger   *zap.Logger
 	clients  map[*Client]bool
 	mu       sync.RWMutex
+	timeProvider temporal.TimeProvider
 }
 
 // Client represents a connected WebSocket client
@@ -35,14 +37,16 @@ type Client struct {
 	send      chan []byte
 	handler   *Handler
 	logger    *zap.Logger
+	timeProvider temporal.TimeProvider
 }
 
 // NewHandler creates a new WebSocket handler
-func NewHandler(eventBus *services.EventBus, logger *zap.Logger) *Handler {
+func NewHandler(eventBus *services.EventBus, logger *zap.Logger, timeProvider temporal.TimeProvider) *Handler {
 	return &Handler{
 		eventBus: eventBus,
 		logger:   logger,
 		clients:  make(map[*Client]bool),
+		timeProvider: timeProvider,
 	}
 }
 
@@ -62,6 +66,7 @@ func (h *Handler) HandleConnection(c *gin.Context) {
 		send:    make(chan []byte, 256),
 		handler: h,
 		logger:  h.logger,
+		timeProvider: h.timeProvider,
 	}
 
 	// Register client
@@ -152,9 +157,9 @@ func (c *Client) readPump() {
 	}()
 
 	c.conn.SetReadLimit(maxMessageSize)
-	c.conn.SetReadDeadline(time.Now().Add(pongWait))
+	c.conn.SetReadDeadline(c.timeProvider.Now().Add(pongWait))
 	c.conn.SetPongHandler(func(string) error {
-		c.conn.SetReadDeadline(time.Now().Add(pongWait))
+		c.conn.SetReadDeadline(c.timeProvider.Now().Add(pongWait))
 		return nil
 	})
 
@@ -174,7 +179,7 @@ func (c *Client) readPump() {
 
 // writePump pumps messages from the handler to the WebSocket connection
 func (c *Client) writePump() {
-	ticker := time.NewTicker(pingPeriod)
+	ticker := c.timeProvider.NewTicker(pingPeriod)
 	defer func() {
 		ticker.Stop()
 		c.conn.Close()
@@ -183,7 +188,7 @@ func (c *Client) writePump() {
 	for {
 		select {
 		case message, ok := <-c.send:
-			c.conn.SetWriteDeadline(time.Now().Add(writeWait))
+			c.conn.SetWriteDeadline(c.timeProvider.Now().Add(writeWait))
 			if !ok {
 				// The handler closed the channel
 				c.conn.WriteMessage(websocket.CloseMessage, []byte{})
@@ -207,8 +212,8 @@ func (c *Client) writePump() {
 				return
 			}
 
-		case <-ticker.C:
-			c.conn.SetWriteDeadline(time.Now().Add(writeWait))
+		case <-ticker.C():
+			c.conn.SetWriteDeadline(c.timeProvider.Now().Add(writeWait))
 			if err := c.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
 				return
 			}

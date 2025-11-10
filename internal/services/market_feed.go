@@ -10,6 +10,7 @@ import (
 	"github.com/backtesting-org/kronos-sdk/pkg/types/portfolio"
 	"github.com/backtesting-org/kronos-sdk/pkg/types/portfolio/store"
 	"go.uber.org/zap"
+	"github.com/backtesting-org/kronos-sdk/pkg/types/temporal"
 )
 
 // MarketDataFeed streams live market data from exchanges to the Kronos store
@@ -18,6 +19,7 @@ type MarketDataFeed struct {
 	wsConn    connector.WebSocketConnector // Optional WebSocket connector
 	store     store.Store
 	logger    *zap.Logger
+	timeProvider temporal.TimeProvider
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -38,6 +40,7 @@ func NewMarketDataFeed(
 	store store.Store,
 	logger *zap.Logger,
 	exchangeName connector.ExchangeName,
+	timeProvider temporal.TimeProvider,
 ) *MarketDataFeed {
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -49,6 +52,7 @@ func NewMarketDataFeed(
 		wsConn:    wsConn,
 		store:     store,
 		logger:    logger,
+		timeProvider: timeProvider,
 		ctx:       ctx,
 		cancel:    cancel,
 		assets:    []portfolio.Asset{}, // Will be set when strategies start
@@ -73,9 +77,9 @@ func (mdf *MarketDataFeed) Start() error {
 		}
 
 		// Wait briefly for WS to be connected before subscriptions begin
-		connectedWaitUntil := time.Now().Add(5 * time.Second)
-		for !mdf.wsConn.IsWebSocketConnected() && time.Now().Before(connectedWaitUntil) {
-			time.Sleep(100 * time.Millisecond)
+		connectedWaitUntil := mdf.timeProvider.Now().Add(5 * time.Second)
+		for !mdf.wsConn.IsWebSocketConnected() && mdf.timeProvider.Now().Before(connectedWaitUntil) {
+			mdf.timeProvider.Sleep(100 * time.Millisecond)
 		}
 		if mdf.wsConn.IsWebSocketConnected() {
 			mdf.logger.Info("Websocket connected")
@@ -119,14 +123,14 @@ func (mdf *MarketDataFeed) Stop() {
 func (mdf *MarketDataFeed) updateMarketDataLoop() {
 	defer mdf.wg.Done()
 
-	ticker := time.NewTicker(5 * time.Second)
+	ticker := mdf.timeProvider.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 
 	for {
 		select {
 		case <-mdf.ctx.Done():
 			return
-		case <-ticker.C:
+		case <-ticker.C():
 			mdf.updateMarketData()
 		}
 	}
@@ -257,13 +261,13 @@ func (mdf *MarketDataFeed) subscribeForAsset(asset portfolio.Asset) error {
 }
 
 func (mdf *MarketDataFeed) retrySubscribeWhenConnected(asset portfolio.Asset) {
-    ticker := time.NewTicker(500 * time.Millisecond)
+    ticker := mdf.timeProvider.NewTicker(500 * time.Millisecond)
     defer ticker.Stop()
     for {
         select {
         case <-mdf.ctx.Done():
             return
-        case <-ticker.C:
+        case <-ticker.C():
             if mdf.wsConn.IsWebSocketConnected() {
                 if err := mdf.subscribeForAsset(asset); err != nil {
                     mdf.logger.Warn("Subscription retry failed", zap.String("asset", asset.Symbol()), zap.Error(err))
@@ -280,7 +284,7 @@ func (mdf *MarketDataFeed) retrySubscribeWhenConnected(asset portfolio.Asset) {
 func (mdf *MarketDataFeed) consumeOrderbookUpdates() {
     defer mdf.wg.Done()
     ch := mdf.wsConn.OrderBookUpdates()
-    lastLog := time.Now()
+    lastLog := mdf.timeProvider.Now()
     for {
         select {
         case <-mdf.ctx.Done():
@@ -292,11 +296,11 @@ func (mdf *MarketDataFeed) consumeOrderbookUpdates() {
             // Use the configured exchange name
             mdf.store.UpdateOrderBook(ob.Asset, mdf.exchanges[0], connector.TypePerpetual, ob)
             mdf.obUpdates++
-            if time.Since(lastLog) > 30*time.Second {
+            if mdf.timeProvider.Since(lastLog) > 30*time.Second {
                 mdf.logger.Info("Orderbook stream healthy",
                     zap.Int64("updates_total", mdf.obUpdates),
                     zap.String("last_asset", ob.Asset.Symbol()))
-                lastLog = time.Now()
+                lastLog = mdf.timeProvider.Now()
             }
         }
     }
@@ -306,7 +310,7 @@ func (mdf *MarketDataFeed) consumeOrderbookUpdates() {
 func (mdf *MarketDataFeed) consumeKlineUpdates() {
     defer mdf.wg.Done()
     ch := mdf.wsConn.KlineUpdates()
-    lastLog := time.Now()
+    lastLog := mdf.timeProvider.Now()
     for {
         select {
         case <-mdf.ctx.Done():
@@ -317,12 +321,12 @@ func (mdf *MarketDataFeed) consumeKlineUpdates() {
             }
             mdf.store.UpdateKline(portfolio.NewAsset(k.Symbol), mdf.exchanges[0], k)
             mdf.klineUpdates++
-            if time.Since(lastLog) > 30*time.Second {
+            if mdf.timeProvider.Since(lastLog) > 30*time.Second {
                 mdf.logger.Info("Kline stream healthy",
                     zap.Int64("updates_total", mdf.klineUpdates),
                     zap.String("last_symbol", k.Symbol),
                     zap.String("interval", k.Interval))
-                lastLog = time.Now()
+                lastLog = mdf.timeProvider.Now()
             }
         }
     }

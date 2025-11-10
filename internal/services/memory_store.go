@@ -7,6 +7,7 @@ import (
 	"github.com/backtesting-org/kronos-sdk/pkg/types/connector"
 	"github.com/backtesting-org/kronos-sdk/pkg/types/portfolio"
 	"github.com/backtesting-org/kronos-sdk/pkg/types/portfolio/store"
+	"github.com/backtesting-org/kronos-sdk/pkg/types/temporal"
 )
 
 // MemoryStore implements the Store interface with in-memory storage
@@ -19,10 +20,11 @@ type MemoryStore struct {
 	klines                 map[portfolio.Asset]store.KlineMap
 	lastUpdated            store.LastUpdatedMap
 	notifier               func()
+	timeProvider           temporal.TimeProvider
 }
 
 // NewMemoryStore creates a new in-memory store
-func NewMemoryStore() *MemoryStore {
+func NewMemoryStore(timeProvider temporal.TimeProvider) *MemoryStore {
 	return &MemoryStore{
 		fundingRates:           make(map[portfolio.Asset]store.FundingRateMap),
 		historicalFundingRates: make(map[portfolio.Asset]store.HistoricalFundingMap),
@@ -30,6 +32,7 @@ func NewMemoryStore() *MemoryStore {
 		assetPrices:            make(map[portfolio.Asset]store.PriceMap),
 		klines:                 make(map[portfolio.Asset]store.KlineMap),
 		lastUpdated:            make(store.LastUpdatedMap),
+		timeProvider:           timeProvider,
 	}
 }
 
@@ -63,7 +66,7 @@ func (ms *MemoryStore) UpdateFundingRates(exchangeName connector.ExchangeName, r
 			DataType: store.DataKeyFundingRates,
 			Asset:    asset,
 			Exchange: exchangeName,
-		}] = time.Now()
+		}] = ms.timeProvider.Now()
 	}
 
 	if ms.notifier != nil {
@@ -113,7 +116,7 @@ func (ms *MemoryStore) UpdateHistoricalFundingRates(asset portfolio.Asset, excha
 		DataType: store.DataKeyHistoricalFunding,
 		Asset:    asset,
 		Exchange: exchangeName,
-	}] = time.Now()
+	}] = ms.timeProvider.Now()
 }
 
 func (ms *MemoryStore) GetHistoricalFundingRatesForAsset(asset portfolio.Asset) store.HistoricalFundingMap {
@@ -200,7 +203,7 @@ func (ms *MemoryStore) UpdateAssetPrices(asset portfolio.Asset, prices map[conne
 			DataType: store.DataKeyAssetPrice,
 			Asset:    asset,
 			Exchange: exchange,
-		}] = time.Now()
+		}] = ms.timeProvider.Now()
 	}
 
 	if ms.notifier != nil {
@@ -314,7 +317,7 @@ func (ms *MemoryStore) GetLastUpdated() store.LastUpdatedMap {
 
 func (ms *MemoryStore) UpdateLastUpdated(key store.UpdateKey) {
 	// Must be called with lock held
-	ms.lastUpdated[key] = time.Now()
+	ms.lastUpdated[key] = ms.timeProvider.Now()
 	if ms.notifier != nil {
 		ms.notifier()
 	}

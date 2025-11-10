@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/backtesting-org/kronos-sdk/pkg/types/temporal"
 	"github.com/shopspring/decimal"
 )
 
@@ -12,6 +13,7 @@ type KlineBuilder struct {
 	activeKlines map[string]*ActiveKline
 	output       chan KlineUpdate
 	mu           sync.RWMutex
+	timeProvider temporal.TimeProvider
 }
 
 type ActiveKline struct {
@@ -41,10 +43,11 @@ type KlineUpdate struct {
 	TradeCount int64
 }
 
-func NewKlineBuilder() *KlineBuilder {
+func NewKlineBuilder(timeProvider temporal.TimeProvider) *KlineBuilder {
 	return &KlineBuilder{
 		activeKlines: make(map[string]*ActiveKline),
 		output:       make(chan KlineUpdate, 100),
+		timeProvider: timeProvider,
 	}
 }
 
@@ -80,7 +83,7 @@ func (kb *KlineBuilder) updateKline(trade TradeUpdate, interval string) {
 	kline.TradeCount++
 
 	// Check if kline period is complete
-	if time.Now().After(kline.CloseTime) && !kline.complete {
+	if kb.timeProvider.Now().After(kline.CloseTime) && !kline.complete {
 		kline.complete = true
 		kb.emitKline(kline)
 		delete(kb.activeKlines, key)

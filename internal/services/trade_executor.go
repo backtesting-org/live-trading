@@ -4,11 +4,11 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/backtesting-org/kronos-sdk/pkg/types/connector"
 	"github.com/backtesting-org/kronos-sdk/pkg/types/portfolio"
 	"github.com/backtesting-org/kronos-sdk/pkg/types/strategy"
+	"github.com/backtesting-org/kronos-sdk/pkg/types/temporal"
 	"github.com/backtesting-org/live-trading/internal/database"
 	"github.com/google/uuid"
 	"go.uber.org/zap"
@@ -21,6 +21,7 @@ type TradeExecutor struct {
 	repo            *database.Repository
 	eventBus        *EventBus
 	logger          *zap.Logger
+	timeProvider    temporal.TimeProvider
 }
 
 // NewTradeExecutor creates a new trade executor service
@@ -30,6 +31,7 @@ func NewTradeExecutor(
 	repo *database.Repository,
 	eventBus *EventBus,
 	logger *zap.Logger,
+	timeProvider temporal.TimeProvider,
 ) *TradeExecutor {
 	return &TradeExecutor{
 		connector:       conn,
@@ -37,6 +39,7 @@ func NewTradeExecutor(
 		repo:            repo,
 		eventBus:        eventBus,
 		logger:          logger,
+		timeProvider:    timeProvider,
 	}
 }
 
@@ -201,7 +204,7 @@ func (te *TradeExecutor) logExecution(ctx context.Context, runID uuid.UUID, leve
 		Level:     level,
 		Message:   message,
 		Metadata:  database.LogMetadata{},
-		Timestamp: time.Now(),
+		Timestamp: te.timeProvider.Now(),
 	}
 
 	if err := te.repo.CreateLog(ctx, log); err != nil {

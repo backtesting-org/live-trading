@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/backtesting-org/kronos-sdk/pkg/types/logging"
+	"github.com/backtesting-org/kronos-sdk/pkg/types/temporal"
 	exchange "github.com/backtesting-org/live-trading/config/exchanges"
 	"github.com/backtesting-org/live-trading/external/exchanges/paradex/adaptor"
 	"github.com/backtesting-org/live-trading/external/websocket/base"
@@ -23,6 +24,7 @@ type Service struct {
 	client            *adaptor.Client
 	applicationLogger logging.ApplicationLogger
 	tradingLogger     logging.TradingLogger
+	timeProvider      temporal.TimeProvider
 
 	requestID    int64
 	requestMutex sync.Mutex
@@ -43,6 +45,7 @@ func NewService(
 	config *exchange.Paradex,
 	logger logging.ApplicationLogger,
 	tradingLogger logging.TradingLogger,
+	timeProvider temporal.TimeProvider,
 ) *Service {
 	connConfig := connection2.TradingConfig(config.WebSocketURL)
 	authManager := security.NewAuthManager(&ParadexAuthProvider{client: client}, logger)
@@ -60,6 +63,7 @@ func NewService(
 		client:            client,
 		applicationLogger: logger,
 		tradingLogger:     tradingLogger,
+		timeProvider:      timeProvider,
 
 		orderbookChan: make(chan OrderbookUpdate, 1000),
 		tradeChan:     make(chan TradeUpdate, 1000),
@@ -67,7 +71,7 @@ func NewService(
 		errorChan:     make(chan error, 10),
 
 		// Initialize kline builder
-		klineBuilder: NewKlineBuilder(),
+		klineBuilder: NewKlineBuilder(timeProvider),
 		klineChan:    make(chan KlineUpdate, 1000),
 	}
 
