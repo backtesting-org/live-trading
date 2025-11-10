@@ -103,7 +103,10 @@ func (ms *MomentumStrategy) generateMomentumSignal(
 	priceChange := current.Close.Sub(previous.Close).Div(previous.Close).Mul(decimal.NewFromInt(100))
 
     if ms.k != nil {
-        ms.k.Log().Debug("Momentum", assetSymbol, fmt.Sprintf("Price change on %s: %s%%", exchange, priceChange.StringFixed(2)))
+        ms.k.Log().Info("Momentum", assetSymbol, fmt.Sprintf("Price change: %s%% (Buy: >%s%%, Sell: <%s%%)",
+			priceChange.StringFixed(4),
+			ms.config.BuyThreshold.StringFixed(2),
+			ms.config.SellThreshold.StringFixed(2)))
     }
 
 	// Generate buy signal on positive momentum
@@ -162,8 +165,8 @@ func NewStrategy() strategy.Strategy {
 	return NewMomentumStrategy(
 		nil, // Kronos not needed for metadata
 		MomentumConfig{
-			BuyThreshold:  decimal.NewFromFloat(2.0),
-			SellThreshold: decimal.NewFromFloat(-2.0),
+			BuyThreshold:  decimal.NewFromFloat(0.1),  // 0.1% = ~$104 move on BTC at 104k
+			SellThreshold: decimal.NewFromFloat(-0.1), // -0.1% = ~$104 move down
 			OrderQuantity: decimal.NewFromFloat(0.01),
 			KlineInterval: "5m",
 			KlineLimit:    20,

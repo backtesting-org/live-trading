@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/backtesting-org/kronos-sdk/pkg/types/connector"
@@ -51,9 +52,11 @@ func (te *TradeExecutor) ExecuteSignal(ctx context.Context, runID uuid.UUID, sig
 		zap.String("signal_id", signal.ID.String()),
 		zap.String("strategy", string(signal.Strategy)))
 
-	// Process each trade action in the signal
-	for _, action := range signal.Actions {
-		if err := te.executeTradeAction(ctx, runID, signal.ID, action); err != nil {
+	// Process each trade action in the signal and collect order IDs
+	orderIDs := make(map[int]string) // Map action index to order ID
+	for i, action := range signal.Actions {
+		orderID, err := te.executeTradeAction(ctx, runID, signal.ID, action)
+		if err != nil {
 			te.logger.Error("Failed to execute trade action",
 				zap.String("signal_id", signal.ID.String()),
 				zap.String("asset", action.Asset.Symbol()),
@@ -65,10 +68,11 @@ func (te *TradeExecutor) ExecuteSignal(ctx context.Context, runID uuid.UUID, sig
 
 			return err
 		}
+		orderIDs[i] = orderID
 	}
 
-	// Store signal in database
-	if err := te.storeSignal(ctx, runID, signal); err != nil {
+	// Store signal in database with order IDs
+	if err := te.storeSignal(ctx, runID, signal, orderIDs); err != nil {
 		te.logger.Error("Failed to store signal", zap.Error(err))
 	}
 
@@ -86,19 +90,19 @@ func (te *TradeExecutor) ExecuteSignal(ctx context.Context, runID uuid.UUID, sig
 	return nil
 }
 
-// executeTradeAction executes a single trade action
+// executeTradeAction executes a single trade action and returns the order ID
 func (te *TradeExecutor) executeTradeAction(
 	ctx context.Context,
 	runID uuid.UUID,
 	signalID uuid.UUID,
 	action strategy.TradeAction,
-) error {
+) (string, error) {
 	// Check risk limits before executing
 	if err := te.positionManager.CheckRiskLimits(action); err != nil {
 		te.logger.Warn("Trade rejected by risk manager",
 			zap.String("asset", action.Asset.Symbol()),
 			zap.Error(err))
-		return err
+		return "", err
 	}
 
 	// Execute based on action type and exchange
@@ -109,11 +113,11 @@ func (te *TradeExecutor) executeTradeAction(
 	case connector.Paradex:
 		orderID, err = te.executeOnParadex(ctx, action)
 	default:
-		return fmt.Errorf("unsupported exchange: %s", action.Exchange)
+		return "", fmt.Errorf("unsupported exchange: %s", action.Exchange)
 	}
 
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	// Update position manager
@@ -137,7 +141,7 @@ func (te *TradeExecutor) executeTradeAction(
 		zap.String("quantity", action.Quantity.String()),
 		zap.String("price", action.Price.String()))
 
-	return nil
+	return orderID, nil
 }
 
 // executeOnParadex executes a trade on Paradex exchange
@@ -150,8 +154,11 @@ func (te *TradeExecutor) executeOnParadex(ctx context.Context, action strategy.T
 		side = connector.OrderSideSell
 	}
 
-	// Use market order for simplicity - PlaceMarketOrder expects string symbol
-	resp, err = te.paradexConnector.PlaceMarketOrder(action.Asset.Symbol(), side, action.Quantity)
+	// Convert asset symbol to Paradex perpetual format (BTC -> BTC-USD-PERP)
+	symbol := te.paradexConnector.GetPerpSymbol(action.Asset)
+
+	// Use market order for simplicity
+	resp, err = te.paradexConnector.PlaceMarketOrder(symbol, side, action.Quantity)
 	if err != nil {
 		return "", err
 	}
@@ -159,19 +166,24 @@ func (te *TradeExecutor) executeOnParadex(ctx context.Context, action strategy.T
 	return resp.OrderID, nil
 }
 
-// storeSignal saves a trading signal to the database
-func (te *TradeExecutor) storeSignal(ctx context.Context, runID uuid.UUID, signal *strategy.Signal) error {
-	for _, action := range signal.Actions {
+// storeSignal saves a trading signal to the database with order IDs
+func (te *TradeExecutor) storeSignal(ctx context.Context, runID uuid.UUID, signal *strategy.Signal, orderIDs map[int]string) error {
+	for i, action := range signal.Actions {
 		dbSignal := &database.TradingSignal{
 			ID:         uuid.New(),
 			RunID:      runID,
-			SignalType: string(action.Action),
+			SignalType: strings.ToUpper(string(action.Action)), // Convert to uppercase for DB constraint
 			Asset:      action.Asset.Symbol(),
 			Exchange:   string(action.Exchange),
 			Quantity:   action.Quantity,
 			Price:      action.Price,
 			Timestamp:  signal.Timestamp,
 			Executed:   true, // Mark as executed
+		}
+
+		// Add order ID if available
+		if orderID, ok := orderIDs[i]; ok && orderID != "" {
+			dbSignal.OrderID = &orderID
 		}
 
 		if err := te.repo.CreateSignal(ctx, dbSignal); err != nil {

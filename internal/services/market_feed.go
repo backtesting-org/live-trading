@@ -156,8 +156,29 @@ func (mdf *MarketDataFeed) updateMarketData() {
 
 // updateKlines fetches and stores recent klines
 func (mdf *MarketDataFeed) updateKlines(asset portfolio.Asset, exchange connector.ExchangeName) error {
-    // Historical klines via REST are not supported on Paradex yet; runtime klines are built from trades via WS
-    return nil
+	// Fetch recent klines for common intervals to keep data fresh
+	// This is especially important when there are no trades (testnet scenario)
+	intervals := []string{"1m", "5m", "15m", "1h"}
+	symbol := mdf.paradexConnector.GetPerpSymbol(asset)
+
+	for _, interval := range intervals {
+		// Fetch latest 20 klines to ensure overlap with what strategies are reading
+		klines, err := mdf.paradexConnector.FetchKlines(symbol, interval, 20)
+		if err != nil {
+			mdf.logger.Warn("Failed to fetch klines for interval",
+				zap.String("asset", asset.Symbol()),
+				zap.String("interval", interval),
+				zap.Error(err))
+			continue
+		}
+
+		// Update the store with fresh klines
+		for _, kline := range klines {
+			mdf.store.UpdateKline(asset, exchange, kline)
+		}
+	}
+
+	return nil
 }
 
 // updateOrderBook fetches and stores current orderbook
@@ -193,6 +214,11 @@ func (mdf *MarketDataFeed) AddAsset(asset portfolio.Asset) {
 
     mdf.assets = append(mdf.assets, asset)
     mdf.logger.Info("Added asset to market feed", zap.String("asset", asset.Symbol()))
+
+    // Pre-populate historical klines for common intervals
+    if mdf.paradexConnector != nil {
+        go mdf.prePopulateKlines(asset)
+    }
 
     // Subscribe to trades (for klines) and orderbook via WS
     if mdf.paradexConnector != nil {
@@ -306,4 +332,31 @@ func (mdf *MarketDataFeed) consumeErrorUpdates() {
             mdf.logger.Error("Paradex websocket error", zap.Error(err))
         }
     }
+}
+
+// prePopulateKlines fetches historical klines for common intervals to pre-populate the store
+func (mdf *MarketDataFeed) prePopulateKlines(asset portfolio.Asset) {
+	// Common kline intervals used by strategies
+	intervals := []string{"1m", "5m", "15m", "1h"}
+
+	// Fetch enough klines for typical strategy needs
+	limit := 100
+
+	symbol := mdf.paradexConnector.GetPerpSymbol(asset)
+
+	for _, interval := range intervals {
+		klines, err := mdf.paradexConnector.FetchKlines(symbol, interval, limit)
+		if err != nil {
+			mdf.logger.Error("Failed to fetch historical klines",
+				zap.String("asset", asset.Symbol()),
+				zap.String("interval", interval),
+				zap.Error(err))
+			continue
+		}
+
+		// Add klines to the store
+		for _, kline := range klines {
+			mdf.store.UpdateKline(asset, connector.Paradex, kline)
+		}
+	}
 }

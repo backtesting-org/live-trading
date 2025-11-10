@@ -294,6 +294,12 @@ func (se *StrategyExecutor) executionLoop(ctx context.Context, running *RunningS
 // processSignals processes trading signals and executes them
 func (se *StrategyExecutor) processSignals(ctx context.Context, running *RunningStrategy, signals []*strategy.Signal) {
 	for _, signal := range signals {
+		// Increment signal counter when signal is generated
+		running.Stats.mu.Lock()
+		running.Stats.TotalSignals += 1
+		running.Stats.LastSignal = time.Now()
+		running.Stats.mu.Unlock()
+
 		// Execute the signal on the exchange
 		if err := se.tradeExecutor.ExecuteSignal(ctx, running.RunID, signal); err != nil {
 			se.logger.Error("Failed to execute signal",
@@ -308,12 +314,13 @@ func (se *StrategyExecutor) processSignals(ctx context.Context, running *Running
 			continue
 		}
 
-		// Update stats
+		// Update trade stats only on successful execution
 		running.Stats.mu.Lock()
-		running.Stats.TotalSignals += 1
 		running.Stats.TotalTrades += int64(len(signal.Actions))
-		running.Stats.LastSignal = time.Now()
 		running.Stats.mu.Unlock()
+
+		// Immediately save stats to database after successful trade
+		se.saveStatsToDatabase(ctx, running)
 
 		se.logger.Info("Signal executed successfully",
 			zap.String("run_id", running.RunID.String()),
@@ -485,4 +492,23 @@ type ExecutionStatus struct {
 	LastSignal   *time.Time  `json:"last_signal,omitempty"`
 	CPUUsage     float64     `json:"cpu_usage"`
 	MemoryUsage  int64       `json:"memory_usage"`
+}
+
+// saveStatsToDatabase immediately persists stats to database
+func (se *StrategyExecutor) saveStatsToDatabase(ctx context.Context, running *RunningStrategy) {
+	run, err := se.repo.GetRun(ctx, running.RunID)
+	if err != nil {
+		se.logger.Error("Failed to get run for stats update", zap.Error(err))
+		return
+	}
+
+	running.Stats.mu.RLock()
+	run.TotalSignals = running.Stats.TotalSignals
+	run.TotalTrades = running.Stats.TotalTrades
+	run.ErrorCount = running.Stats.ErrorCount
+	running.Stats.mu.RUnlock()
+
+	if err := se.repo.UpdateRun(ctx, run); err != nil {
+		se.logger.Error("Failed to save stats to database", zap.Error(err))
+	}
 }

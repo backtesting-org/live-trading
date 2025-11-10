@@ -43,8 +43,8 @@ func (p *Paradex) PlaceMarketOrder(symbol string, side connector.OrderSide, quan
 		Side:      string(side),
 		Size:      quantity.String(),
 		OrderType: "MARKET",
-		Price:     "0", // Market orders may still need a price field
-		ClientID:  "",  // Optional
+		Price:     "", // Empty for MARKET orders - will be omitted by PlaceOrder
+		ClientID:  "", // Optional
 	}
 
 	resp, err := p.paradexService.PlaceOrder(p.ctx, orderReq)
@@ -116,6 +116,36 @@ func (p *Paradex) GetOrderStatus(orderID string) (*connector.Order, error) {
 	convertedOrder := p.convertParadexOrder(order)
 
 	return &convertedOrder, nil
+}
+
+// GetRawOrder returns the raw Paradex order details
+func (p *Paradex) GetRawOrder(ctx context.Context, orderID string) (interface{}, error) {
+	return p.paradexService.GetOrder(ctx, orderID)
+}
+
+// GetRawOpenOrders returns open orders with optional market filter
+func (p *Paradex) GetRawOpenOrders(ctx context.Context, market *string) (interface{}, error) {
+	return p.paradexService.GetOpenOrders(ctx, market)
+}
+
+// GetAccountSummary returns the account summary
+func (p *Paradex) GetAccountSummary(ctx context.Context) (interface{}, error) {
+	return p.paradexService.GetAccount(ctx)
+}
+
+// GetBalances returns account balances
+func (p *Paradex) GetBalances(ctx context.Context) (interface{}, error) {
+	return p.paradexService.GetAssetBalances(ctx)
+}
+
+// GetUserPositions returns current positions
+func (p *Paradex) GetUserPositions(ctx context.Context) (interface{}, error) {
+	return p.paradexService.GetUserPositions(ctx)
+}
+
+// GetTradeHistory returns trade history with optional market filter
+func (p *Paradex) GetTradeHistory(ctx context.Context, market *string) (interface{}, error) {
+	return p.paradexService.GetTradeHistory(ctx, market, nil)
 }
 
 func (p *Paradex) GetTradingHistory(symbol string, limit int) ([]connector.Trade, error) {

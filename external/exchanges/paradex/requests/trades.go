@@ -69,10 +69,13 @@ func (s *Service) PlaceOrder(ctx context.Context, params PlaceOrderParams) (*mod
 		Type:               struct{ models.ResponsesOrderType }{models.ResponsesOrderType(params.OrderType)},
 		Side:               struct{ models.ResponsesOrderSide }{models.ResponsesOrderSide(params.Side)},
 		Market:             &params.Market,
-		Price:              &params.Price,
 		Size:               &params.Size,
 		Signature:          &orderSignature,
 		SignatureTimestamp: &now,
+	}
+	// Only include price for LIMIT orders (omit for MARKET orders)
+	if params.OrderType != "MARKET" && params.Price != "" {
+		orderReq.Price = &params.Price
 	}
 	if params.Instruction != "" {
 		orderReq.Instruction = &params.Instruction

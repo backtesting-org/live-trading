@@ -10,16 +10,16 @@ import (
 
 	"github.com/backtesting-org/kronos-sdk/pkg/types/logging"
 	"github.com/backtesting-org/kronos-sdk/pkg/types/portfolio/store"
+	exchange "github.com/backtesting-org/live-trading/config/exchanges"
+	"github.com/backtesting-org/live-trading/external/exchanges/paradex/adaptor"
+	"github.com/backtesting-org/live-trading/external/exchanges/paradex/requests"
+	websockets "github.com/backtesting-org/live-trading/external/exchanges/paradex/websocket"
 	"github.com/backtesting-org/live-trading/internal/api"
 	"github.com/backtesting-org/live-trading/internal/api/handlers"
 	"github.com/backtesting-org/live-trading/internal/api/websocket"
 	"github.com/backtesting-org/live-trading/internal/config"
-	exchange "github.com/backtesting-org/live-trading/config/exchanges"
 	"github.com/backtesting-org/live-trading/internal/database"
 	"github.com/backtesting-org/live-trading/internal/exchanges/paradex"
-	"github.com/backtesting-org/live-trading/external/exchanges/paradex/adaptor"
-	"github.com/backtesting-org/live-trading/external/exchanges/paradex/requests"
-	websockets "github.com/backtesting-org/live-trading/external/exchanges/paradex/websocket"
 	"github.com/backtesting-org/live-trading/internal/services"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
@@ -45,6 +45,7 @@ func main() {
 			services.NewStrategyExecutor,
 			handlers.NewPluginHandler,
 			handlers.NewStrategyHandler,
+			handlers.NewOrdersHandler,
 			websocket.NewHandler,
 			provideHTTPServer,
 		),
@@ -145,6 +146,7 @@ func provideParadexConnector(
 	// Onboard the account if not already onboarded
 	logger.Info("Onboarding Paradex account...")
 	if err := client.Onboard(context.Background()); err != nil {
+		logger.Info(err.Error())
 		// Check if it's already onboarded
 		if !strings.Contains(err.Error(), "ALREADY_ONBOARDED") && !strings.Contains(err.Error(), "already onboarded") {
 			logger.Warn("Failed to onboard Paradex account - will attempt to continue", zap.Error(err))
@@ -174,12 +176,14 @@ func provideHTTPServer(
 	cfg *config.Config,
 	pluginHandler *handlers.PluginHandler,
 	strategyHandler *handlers.StrategyHandler,
+	ordersHandler *handlers.OrdersHandler,
 	wsHandler *websocket.Handler,
 	logger *zap.Logger,
 ) *http.Server {
 	router := api.SetupRouter(
 		pluginHandler,
 		strategyHandler,
+		ordersHandler,
 		wsHandler,
 		logger,
 		cfg.Server.CORSAllowOrigin,
