@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/backtesting-org/kronos-sdk/pkg/kronos"
@@ -16,6 +17,9 @@ type MomentumStrategy struct {
 	k      *kronos.Kronos
 	config MomentumConfig
 }
+
+// SetKronos injects the Kronos context at runtime
+func (ms *MomentumStrategy) SetKronos(k *kronos.Kronos) { ms.k = k }
 
 // MomentumConfig holds momentum strategy parameters
 type MomentumConfig struct {
@@ -48,7 +52,11 @@ func (ms *MomentumStrategy) GetSignals() ([]*strategy.Signal, error) {
 		return nil, nil
 	}
 
-	ms.k.Log().Info("Momentum", "", "Scanning for momentum opportunities...")
+    if ms.k == nil {
+        return nil, nil
+    }
+
+    ms.k.Log().Info("Momentum", "", "Scanning for momentum opportunities...")
 
 	var signals []*strategy.Signal
 
@@ -65,7 +73,9 @@ func (ms *MomentumStrategy) GetSignals() ([]*strategy.Signal, error) {
 		}
 	}
 
-	ms.k.Log().Info("Momentum", "", "Generated %d momentum signals", len(signals))
+    if ms.k != nil {
+        ms.k.Log().Info("Momentum", "", fmt.Sprintf("Generated %d momentum signals", len(signals)))
+    }
 	return signals, nil
 }
 
@@ -74,7 +84,10 @@ func (ms *MomentumStrategy) generateMomentumSignal(
 	assetSymbol string,
 	exchange connector.ExchangeName,
 ) *strategy.Signal {
-	asset := ms.k.Asset(assetSymbol)
+    if ms.k == nil {
+        return nil
+    }
+    asset := ms.k.Asset(assetSymbol)
 
 	// Get recent klines using Kronos store
 	klines := ms.k.Store().GetKlines(asset, exchange, ms.config.KlineInterval, ms.config.KlineLimit)
@@ -89,23 +102,32 @@ func (ms *MomentumStrategy) generateMomentumSignal(
 	// Calculate price change percentage
 	priceChange := current.Close.Sub(previous.Close).Div(previous.Close).Mul(decimal.NewFromInt(100))
 
-	ms.k.Log().Debug("Momentum", assetSymbol, "Price change on %s: %s%%", exchange, priceChange.StringFixed(2))
+    if ms.k != nil {
+        ms.k.Log().Info("Momentum", assetSymbol, fmt.Sprintf("Price change: %s%% (Buy: >%s%%, Sell: <%s%%)",
+			priceChange.StringFixed(4),
+			ms.config.BuyThreshold.StringFixed(2),
+			ms.config.SellThreshold.StringFixed(2)))
+    }
 
 	// Generate buy signal on positive momentum
 	if priceChange.GreaterThan(ms.config.BuyThreshold) {
-		ms.k.Log().Opportunity("Momentum", assetSymbol, "BUY signal on %s: %s%% change (threshold: %s%%)",
+        if ms.k != nil {
+            ms.k.Log().Opportunity("Momentum", assetSymbol, fmt.Sprintf("BUY signal on %s: %s%% change (threshold: %s%%)",
 			exchange,
 			priceChange.StringFixed(2),
-			ms.config.BuyThreshold.StringFixed(2))
+            ms.config.BuyThreshold.StringFixed(2)))
+        }
 		return ms.createSignal(strategy.ActionBuy, assetSymbol, exchange, ms.config.OrderQuantity, current.Close)
 	}
 
 	// Generate sell signal on negative momentum
-	if priceChange.LessThan(ms.config.SellThreshold) {
-		ms.k.Log().Opportunity("Momentum", assetSymbol, "SELL signal on %s: %s%% change (threshold: %s%%)",
+    if priceChange.LessThan(ms.config.SellThreshold) {
+        if ms.k != nil {
+            ms.k.Log().Opportunity("Momentum", assetSymbol, fmt.Sprintf("SELL signal on %s: %s%% change (threshold: %s%%)",
 			exchange,
 			priceChange.StringFixed(2),
-			ms.config.SellThreshold.StringFixed(2))
+            ms.config.SellThreshold.StringFixed(2)))
+        }
 		return ms.createSignal(strategy.ActionSell, assetSymbol, exchange, ms.config.OrderQuantity, current.Close)
 	}
 
@@ -143,8 +165,8 @@ func NewStrategy() strategy.Strategy {
 	return NewMomentumStrategy(
 		nil, // Kronos not needed for metadata
 		MomentumConfig{
-			BuyThreshold:  decimal.NewFromFloat(2.0),
-			SellThreshold: decimal.NewFromFloat(-2.0),
+			BuyThreshold:  decimal.NewFromFloat(0.1),  // 0.1% = ~$104 move on BTC at 104k
+			SellThreshold: decimal.NewFromFloat(-0.1), // -0.1% = ~$104 move down
 			OrderQuantity: decimal.NewFromFloat(0.01),
 			KlineInterval: "5m",
 			KlineLimit:    20,

@@ -15,12 +15,15 @@ import (
 
 // StrategyExecutor manages strategy execution lifecycle
 type StrategyExecutor struct {
-	repo          *database.Repository
-	pluginManager *PluginManager
-	logger        *zap.Logger
+	repo            *database.Repository
+	pluginManager   *PluginManager
+	kronosProvider  *KronosProvider
+	tradeExecutor   *TradeExecutor
+	marketDataFeed  *MarketDataFeed
+	logger          *zap.Logger
 	runningStrategies map[uuid.UUID]*RunningStrategy
-	mu            sync.RWMutex
-	eventBus      *EventBus
+	mu              sync.RWMutex
+	eventBus        *EventBus
 }
 
 // RunningStrategy represents an actively running strategy
@@ -49,12 +52,18 @@ type RuntimeStats struct {
 func NewStrategyExecutor(
 	repo *database.Repository,
 	pluginManager *PluginManager,
+	kronosProvider *KronosProvider,
+	tradeExecutor *TradeExecutor,
+	marketDataFeed *MarketDataFeed,
 	logger *zap.Logger,
 	eventBus *EventBus,
 ) *StrategyExecutor {
 	return &StrategyExecutor{
 		repo:              repo,
 		pluginManager:     pluginManager,
+		kronosProvider:    kronosProvider,
+		tradeExecutor:     tradeExecutor,
+		marketDataFeed:    marketDataFeed,
 		logger:            logger,
 		runningStrategies: make(map[uuid.UUID]*RunningStrategy),
 		eventBus:          eventBus,
@@ -75,11 +84,24 @@ func (se *StrategyExecutor) StartStrategy(ctx context.Context, pluginID uuid.UUI
 		return uuid.Nil, fmt.Errorf("strategy is already running with run ID: %s", activeRun.ID)
 	}
 
-	// Instantiate strategy from plugin
-	strat, err := se.pluginManager.InstantiateStrategy(ctx, pluginID)
+    // Instantiate strategy from plugin
+    strat, err := se.pluginManager.InstantiateStrategy(ctx, pluginID)
 	if err != nil {
 		return uuid.Nil, fmt.Errorf("failed to instantiate strategy: %w", err)
 	}
+
+    // Inject Kronos if strategy supports it
+    if se.kronosProvider != nil {
+        if aware, ok := strat.(KronosAware); ok {
+            k := se.kronosProvider.CreateKronos()
+            aware.SetKronos(k)
+
+            // Register core assets for market data feed (per-exchange support)
+            if se.marketDataFeed != nil {
+                se.marketDataFeed.AddAsset(k.Asset("BTC"))
+            }
+        }
+    }
 
 	// Create run record
 	run := &database.StrategyRun{
@@ -87,7 +109,7 @@ func (se *StrategyExecutor) StartStrategy(ctx context.Context, pluginID uuid.UUI
 		PluginID:  pluginID,
 		ConfigID:  configID,
 		Status:    database.RunStatusRunning,
-		StartTime: time.Now(),
+		StartTime: time.Now().UTC(),
 	}
 
 	if err := se.repo.CreateRun(ctx, run); err != nil {
@@ -165,7 +187,7 @@ func (se *StrategyExecutor) StopStrategy(ctx context.Context, runID uuid.UUID) e
 		return fmt.Errorf("failed to get run: %w", err)
 	}
 
-	endTime := time.Now()
+	endTime := time.Now().UTC()
 	run.Status = database.RunStatusStopped
 	run.EndTime = &endTime
 	run.TotalSignals = running.Stats.TotalSignals
@@ -214,7 +236,7 @@ func (se *StrategyExecutor) executionLoop(ctx context.Context, running *RunningS
 			updateCtx := context.Background()
 			run, err := se.repo.GetRun(updateCtx, running.RunID)
 			if err == nil {
-				endTime := time.Now()
+				endTime := time.Now().UTC()
 				run.Status = database.RunStatusError
 				errorMsg := fmt.Sprintf("panic: %v", r)
 				run.ErrorMessage = &errorMsg
@@ -269,56 +291,42 @@ func (se *StrategyExecutor) executionLoop(ctx context.Context, running *RunningS
 	}
 }
 
-// processSignals processes trading signals
+// processSignals processes trading signals and executes them
 func (se *StrategyExecutor) processSignals(ctx context.Context, running *RunningStrategy, signals []*strategy.Signal) {
 	for _, signal := range signals {
-		// Store each signal action in database
-		for _, action := range signal.Actions {
-			dbSignal := &database.TradingSignal{
-				ID:         uuid.New(),
-				RunID:      running.RunID,
-				SignalType: string(action.Action),
-				Asset:      action.Asset.Symbol(),
-				Exchange:   string(action.Exchange),
-				Quantity:   action.Quantity,
-				Price:      action.Price,
-				Timestamp:  signal.Timestamp,
-				Executed:   false,
-			}
+		// Increment signal counter when signal is generated
+		running.Stats.mu.Lock()
+		running.Stats.TotalSignals += 1
+		running.Stats.LastSignal = time.Now()
+		running.Stats.mu.Unlock()
 
-			if err := se.repo.CreateSignal(ctx, dbSignal); err != nil {
-				se.logger.Error("Failed to store signal", zap.Error(err))
-				continue
-			}
-
-			// Publish signal event
-			se.eventBus.Publish(Event{
-				Type: EventSignalGenerated,
-				Data: map[string]interface{}{
-					"run_id":      running.RunID.String(),
-					"signal_id":   dbSignal.ID.String(),
-					"signal_type": dbSignal.SignalType,
-					"asset":       dbSignal.Asset,
-					"exchange":    dbSignal.Exchange,
-					"quantity":    dbSignal.Quantity.String(),
-					"price":       dbSignal.Price.String(),
-					"timestamp":   dbSignal.Timestamp,
-				},
-			})
-
-			se.logger.Info("Signal generated",
+		// Execute the signal on the exchange
+		if err := se.tradeExecutor.ExecuteSignal(ctx, running.RunID, signal); err != nil {
+			se.logger.Error("Failed to execute signal",
 				zap.String("run_id", running.RunID.String()),
-				zap.String("type", dbSignal.SignalType),
-				zap.String("asset", dbSignal.Asset),
-				zap.String("price", dbSignal.Price.String()))
-		}
-	}
+				zap.String("signal_id", signal.ID.String()),
+				zap.Error(err))
 
-	// Update stats
-	running.Stats.mu.Lock()
-	running.Stats.TotalSignals += int64(len(signals))
-	running.Stats.LastSignal = time.Now()
-	running.Stats.mu.Unlock()
+			running.Stats.mu.Lock()
+			running.Stats.ErrorCount++
+			running.Stats.mu.Unlock()
+
+			continue
+		}
+
+		// Update trade stats only on successful execution
+		running.Stats.mu.Lock()
+		running.Stats.TotalTrades += int64(len(signal.Actions))
+		running.Stats.mu.Unlock()
+
+		// Immediately save stats to database after successful trade
+		se.saveStatsToDatabase(ctx, running)
+
+		se.logger.Info("Signal executed successfully",
+			zap.String("run_id", running.RunID.String()),
+			zap.String("signal_id", signal.ID.String()),
+			zap.Int("actions", len(signal.Actions)))
+	}
 }
 
 // updateMetrics updates runtime metrics
@@ -415,7 +423,60 @@ func (se *StrategyExecutor) ListRuns(ctx context.Context, pluginID uuid.UUID, li
 
 // GetRunStats retrieves detailed statistics for a run
 func (se *StrategyExecutor) GetRunStats(ctx context.Context, runID uuid.UUID) (map[string]interface{}, error) {
-	return se.repo.GetRunStats(ctx, runID)
+	// Get run from database
+	run, err := se.repo.GetRun(ctx, runID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get run: %w", err)
+	}
+
+	// Get base stats from database
+	stats, err := se.repo.GetRunStats(ctx, runID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Add run metadata
+	stats["run_id"] = runID.String()
+	stats["total_trades"] = run.TotalTrades
+	stats["error_count"] = run.ErrorCount
+	stats["cpu_usage"] = run.CPUUsage
+	stats["memory_usage"] = run.MemoryUsage
+
+	// Calculate uptime
+	var uptimeSeconds int64
+	if run.EndTime != nil {
+		uptimeSeconds = int64(run.EndTime.Sub(run.StartTime).Seconds())
+	} else {
+		uptimeSeconds = int64(time.Since(run.StartTime).Seconds())
+	}
+	stats["uptime_seconds"] = uptimeSeconds
+
+	// Add last_signal from live stats if running
+	se.mu.RLock()
+	running, exists := se.runningStrategies[runID]
+	se.mu.RUnlock()
+
+	if exists && !running.Stats.LastSignal.IsZero() {
+		stats["last_signal"] = running.Stats.LastSignal.Format(time.RFC3339)
+	} else {
+		stats["last_signal"] = nil
+	}
+
+	// Add P&L and win rate from PositionManager
+	perf := se.tradeExecutor.positionManager.GetPerformance(runID.String())
+	winRate := se.tradeExecutor.positionManager.GetWinRate(runID.String())
+
+	// Enhance stats with P&L metrics
+	stats["realized_pnl"] = perf.RealizedPnL.String()
+	stats["unrealized_pnl"] = perf.UnrealizedPnL.String()
+	stats["winning_trades"] = perf.WinningTrades
+	stats["losing_trades"] = perf.LosingTrades
+	stats["win_rate"] = winRate.StringFixed(2) + "%" // e.g., "65.50%"
+	stats["total_volume"] = perf.TotalVolume.String()
+	stats["largest_win"] = perf.LargestWin.String()
+	stats["largest_loss"] = perf.LargestLoss.String()
+
+	return stats, nil
 }
 
 // ExecutionStatus represents the current status of a strategy execution
@@ -431,4 +492,23 @@ type ExecutionStatus struct {
 	LastSignal   *time.Time  `json:"last_signal,omitempty"`
 	CPUUsage     float64     `json:"cpu_usage"`
 	MemoryUsage  int64       `json:"memory_usage"`
+}
+
+// saveStatsToDatabase immediately persists stats to database
+func (se *StrategyExecutor) saveStatsToDatabase(ctx context.Context, running *RunningStrategy) {
+	run, err := se.repo.GetRun(ctx, running.RunID)
+	if err != nil {
+		se.logger.Error("Failed to get run for stats update", zap.Error(err))
+		return
+	}
+
+	running.Stats.mu.RLock()
+	run.TotalSignals = running.Stats.TotalSignals
+	run.TotalTrades = running.Stats.TotalTrades
+	run.ErrorCount = running.Stats.ErrorCount
+	running.Stats.mu.RUnlock()
+
+	if err := se.repo.UpdateRun(ctx, run); err != nil {
+		se.logger.Error("Failed to save stats to database", zap.Error(err))
+	}
 }

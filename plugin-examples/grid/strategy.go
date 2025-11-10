@@ -17,6 +17,9 @@ type GridStrategy struct {
 	config GridConfig
 }
 
+// SetKronos injects the Kronos context at runtime
+func (gs *GridStrategy) SetKronos(k *kronos.Kronos) { gs.k = k }
+
 // GridConfig holds grid trading parameters
 type GridConfig struct {
 	PriceLower          decimal.Decimal
@@ -48,16 +51,20 @@ func (gs *GridStrategy) GetSignals() ([]*strategy.Signal, error) {
 		return nil, nil
 	}
 
-	gs.k.Log().Info("GridTrading", "", "Scanning grid levels...")
+    if gs.k == nil {
+        return nil, nil
+    }
+
+    gs.k.Log().Info("GridTrading", "", "Scanning grid levels...")
 
 	// Get BTC price
-	asset := gs.k.Asset("BTC")
+    asset := gs.k.Asset("BTC")
 	exchange := connector.Bybit
 
 	// Get order book using Kronos store
 	orderBook := gs.k.Store().GetOrderBook(asset, exchange, connector.TypePerpetual)
-	if orderBook == nil || len(orderBook.Bids) == 0 || len(orderBook.Asks) == 0 {
-		gs.k.Log().Info("GridTrading", "BTC", "No orderbook data available on %s", exchange)
+    if orderBook == nil || len(orderBook.Bids) == 0 || len(orderBook.Asks) == 0 {
+        gs.k.Log().Info("GridTrading", "BTC", "No orderbook data available on %s", exchange)
 		return nil, nil
 	}
 
@@ -107,7 +114,7 @@ func (gs *GridStrategy) GetSignals() ([]*strategy.Signal, error) {
 		signalsGenerated++
 	}
 
-	gs.k.Log().Info("GridTrading", "BTC", "Generated %d grid signals on %s (price: %s)", len(signals), exchange, currentPrice.StringFixed(2))
+    gs.k.Log().Info("GridTrading", "BTC", "Generated %d grid signals on %s (price: %s)", len(signals), exchange, currentPrice.StringFixed(2))
 	return signals, nil
 }
 

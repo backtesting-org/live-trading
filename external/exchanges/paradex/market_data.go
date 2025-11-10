@@ -92,7 +92,70 @@ func (p *Paradex) FetchRecentTrades(symbol string, limit int) ([]connector.Trade
 }
 
 func (p *Paradex) FetchKlines(symbol, interval string, limit int) ([]connector.Kline, error) {
-	return nil, fmt.Errorf("klines not needed for MM strategy")
+	// Convert interval string (e.g., "5m", "1h") to resolution in minutes
+	resolution, err := parseIntervalToMinutes(interval)
+	if err != nil {
+		return nil, fmt.Errorf("invalid interval %s: %w", interval, err)
+	}
+
+	// Calculate time range: get last N klines based on resolution
+	endTime := time.Now()
+	duration := time.Duration(limit*resolution) * time.Minute
+	startTime := endTime.Add(-duration)
+
+	// Convert to milliseconds
+	startMs := startTime.UnixMilli()
+	endMs := endTime.UnixMilli()
+
+	// Fetch klines from Paradex
+	klineData, err := p.paradexService.GetKlines(p.ctx, symbol, resolution, startMs, endMs)
+	if err != nil {
+		p.appLogger.Error("Failed to fetch klines", "symbol", symbol, "interval", interval, "error", err)
+		return nil, fmt.Errorf("failed to fetch klines for %s: %w", symbol, err)
+	}
+
+	// Convert to connector.Kline format
+	klines := make([]connector.Kline, 0, len(klineData))
+	for _, k := range klineData {
+		klines = append(klines, connector.Kline{
+			Symbol:    symbol,
+			Interval:  interval,
+			OpenTime:  time.UnixMilli(k.Timestamp),
+			Open:      decimal.NewFromFloat(k.Open),
+			High:      decimal.NewFromFloat(k.High),
+			Low:       decimal.NewFromFloat(k.Low),
+			Close:     decimal.NewFromFloat(k.Close),
+			Volume:    decimal.NewFromFloat(k.Volume),
+		})
+	}
+
+	return klines, nil
+}
+
+// parseIntervalToMinutes converts interval string to minutes
+// Supports: 1m, 3m, 5m, 15m, 30m, 1h, 2h, 4h, etc.
+func parseIntervalToMinutes(interval string) (int, error) {
+	if len(interval) < 2 {
+		return 0, fmt.Errorf("interval too short")
+	}
+
+	unit := interval[len(interval)-1]
+	valueStr := interval[:len(interval)-1]
+
+	var value int
+	_, err := fmt.Sscanf(valueStr, "%d", &value)
+	if err != nil {
+		return 0, fmt.Errorf("invalid interval value: %w", err)
+	}
+
+	switch unit {
+	case 'm', 'M':
+		return value, nil
+	case 'h', 'H':
+		return value * 60, nil
+	default:
+		return 0, fmt.Errorf("unsupported interval unit: %c", unit)
+	}
 }
 
 func (p *Paradex) FetchRiskFundBalance(symbol string) (*connector.RiskFundBalance, error) {

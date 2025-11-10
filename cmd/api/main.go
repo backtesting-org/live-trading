@@ -5,12 +5,20 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
+	"github.com/backtesting-org/kronos-sdk/pkg/types/connector"
+	"github.com/backtesting-org/kronos-sdk/pkg/types/logging"
+	"github.com/backtesting-org/kronos-sdk/pkg/types/portfolio/store"
+	exchange "github.com/backtesting-org/live-trading/config/exchanges"
+	"github.com/backtesting-org/live-trading/external/exchanges/paradex"
+	"github.com/backtesting-org/live-trading/external/exchanges/paradex/adaptor"
 	"github.com/backtesting-org/live-trading/internal/api"
 	"github.com/backtesting-org/live-trading/internal/api/handlers"
 	"github.com/backtesting-org/live-trading/internal/api/websocket"
 	"github.com/backtesting-org/live-trading/internal/config"
+	"github.com/backtesting-org/live-trading/internal/connectors"
 	"github.com/backtesting-org/live-trading/internal/database"
 	"github.com/backtesting-org/live-trading/internal/services"
 	"go.uber.org/fx"
@@ -24,11 +32,21 @@ func main() {
 			config.LoadConfig,
 			provideLogger,
 			provideRepository,
+			provideParadexConfig,
+			provideConnectorRegistry,
+			provideConnector,
+			provideStore,
+			provideTradingLogger,
 			services.NewEventBus,
 			services.NewPluginManager,
+			services.NewPositionManager,
+			services.NewKronosProvider,
+			provideMarketDataFeed,
+			provideTradeExecutor,
 			services.NewStrategyExecutor,
 			handlers.NewPluginHandler,
 			handlers.NewStrategyHandler,
+			handlers.NewOrdersHandler,
 			websocket.NewHandler,
 			provideHTTPServer,
 		),
@@ -91,16 +109,147 @@ func provideRepository(cfg *config.Config, logger *zap.Logger) (*database.Reposi
 	return repo, nil
 }
 
+func provideParadexConfig(logger *zap.Logger) (*exchange.Paradex, error) {
+	logger.Info("Loading Paradex configuration...")
+	cfg := &exchange.Paradex{}
+
+	// Try to load config, but don't fail if credentials are missing
+	// This allows the server to start even without Paradex credentials
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Warn("Paradex configuration incomplete - trading will be disabled until credentials are provided",
+				zap.Any("error", r))
+		}
+	}()
+
+	cfg.LoadParadexConfig()
+	return cfg, nil
+}
+
+func provideConnectorRegistry(
+	cfg *config.Config,
+	paradexConfig *exchange.Paradex,
+	tradingLogger logging.TradingLogger,
+	logger *zap.Logger,
+) *connectors.Registry {
+	logger.Info("Initializing connector registry...")
+
+	registry := connectors.NewRegistry()
+	appLogger := services.NewApplicationLogger(logger)
+
+	// Register Paradex connector provider (exchange-specific code in external/)
+	registry.Register("paradex", func() (connector.Connector, error) {
+		return paradex.NewConnector(paradexConfig, appLogger, tradingLogger)
+	})
+
+	// Future exchanges can be registered here:
+	// registry.Register("binance", func() (connector.Connector, error) {
+	//     return binance.NewConnector(binanceConfig, appLogger, tradingLogger)
+	// })
+
+	logger.Info("Connector registry initialized", zap.Strings("exchanges", registry.ListExchanges()))
+	return registry
+}
+
+func provideConnector(
+	cfg *config.Config,
+	registry *connectors.Registry,
+	logger *zap.Logger,
+) (connector.Connector, error) {
+	exchangeName := strings.ToLower(cfg.Exchange.Name)
+	logger.Info("Creating exchange connector...", zap.String("exchange", exchangeName))
+
+	conn, err := registry.GetConnector(exchangeName)
+	if err != nil {
+		logger.Warn("Failed to create connector - trading will be disabled", zap.Error(err))
+		// Return nil connector instead of failing - allows server to start
+		return nil, nil
+	}
+
+	// Onboard account if needed (Paradex-specific, but done in main.go for now)
+	if exchangeName == "paradex" && conn != nil {
+		logger.Info("Onboarding Paradex account...")
+		if err := onboardParadexAccount(logger); err != nil {
+			logger.Warn("Failed to onboard account", zap.Error(err))
+		}
+	}
+
+	logger.Info("Connector initialized successfully", zap.String("exchange", exchangeName))
+	return conn, nil
+}
+
+// onboardParadexAccount handles Paradex-specific onboarding
+// TODO: Move this to external/exchanges/paradex as a hook/callback
+func onboardParadexAccount(logger *zap.Logger) error {
+	// Load Paradex config
+	cfg := &exchange.Paradex{}
+	cfg.LoadParadexConfig()
+
+	appLogger := services.NewApplicationLogger(logger)
+	client, err := adaptor.NewClient(cfg, appLogger)
+	if err != nil {
+		return err
+	}
+
+	if err := client.Onboard(context.Background()); err != nil {
+		if strings.Contains(err.Error(), "ALREADY_ONBOARDED") || strings.Contains(err.Error(), "already onboarded") {
+			logger.Info("Paradex account already onboarded")
+			return nil
+		}
+		return err
+	}
+
+	logger.Info("Paradex account onboarded successfully")
+	return nil
+}
+
+func provideMarketDataFeed(
+	conn connector.Connector,
+	store store.Store,
+	cfg *config.Config,
+	logger *zap.Logger,
+) *services.MarketDataFeed {
+	// Map config exchange name to connector.ExchangeName
+	var exchangeName connector.ExchangeName
+	switch strings.ToLower(cfg.Exchange.Name) {
+	case "paradex":
+		exchangeName = connector.Paradex
+	default:
+		exchangeName = connector.Paradex
+	}
+	return services.NewMarketDataFeed(conn, store, logger, exchangeName)
+}
+
+func provideTradeExecutor(
+	conn connector.Connector,
+	positionManager *services.PositionManager,
+	repo *database.Repository,
+	eventBus *services.EventBus,
+	logger *zap.Logger,
+) *services.TradeExecutor {
+	return services.NewTradeExecutor(conn, positionManager, repo, eventBus, logger)
+}
+
+func provideStore() store.Store {
+	return services.NewMemoryStore()
+}
+
+func provideTradingLogger(logger *zap.Logger) logging.TradingLogger {
+	return services.NewTradingLogger(logger)
+}
+
 func provideHTTPServer(
 	cfg *config.Config,
 	pluginHandler *handlers.PluginHandler,
 	strategyHandler *handlers.StrategyHandler,
+	ordersHandler *handlers.OrdersHandler,
 	wsHandler *websocket.Handler,
 	logger *zap.Logger,
 ) *http.Server {
 	router := api.SetupRouter(
 		pluginHandler,
 		strategyHandler,
+		ordersHandler,
 		wsHandler,
 		logger,
 		cfg.Server.CORSAllowOrigin,
@@ -140,11 +289,22 @@ func registerLifecycle(
 	server *http.Server,
 	repo *database.Repository,
 	eventBus *services.EventBus,
+	marketDataFeed *services.MarketDataFeed,
 	logger *zap.Logger,
 	cfg *config.Config,
 ) {
 	lc.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
+			// Start market data feed
+			logger.Info("Starting market data feed...")
+			if err := marketDataFeed.Start(); err != nil {
+				logger.Error("Failed to start market data feed", zap.Error(err))
+				// Don't fail startup if market feed fails - may not have Paradex credentials yet
+			} else {
+				logger.Info("Market data feed started successfully")
+			}
+
+			// Start HTTP server
 			go func() {
 				logger.Info("Server started",
 					zap.String("address", server.Addr),
@@ -161,6 +321,10 @@ func registerLifecycle(
 
 			shutdownCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 			defer cancel()
+
+			// Stop market data feed
+			logger.Info("Stopping market data feed...")
+			marketDataFeed.Stop()
 
 			if err := server.Shutdown(shutdownCtx); err != nil {
 				logger.Error("Server forced to shutdown", zap.Error(err))

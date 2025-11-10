@@ -14,6 +14,7 @@ import (
 func SetupRouter(
 	pluginHandler *handlers.PluginHandler,
 	strategyHandler *handlers.StrategyHandler,
+	ordersHandler *handlers.OrdersHandler,
 	wsHandler *websocket.Handler,
 	logger *zap.Logger,
 	corsAllowOrigin string,
@@ -70,6 +71,22 @@ func SetupRouter(
 			strategies.POST("/:runId/stop", strategyHandler.StopStrategy)
 			strategies.GET("/:runId/status", strategyHandler.GetRunStatus)
 			strategies.GET("/:runId/stats", strategyHandler.GetRunStats)
+		}
+
+		// Order management
+		orders := v1.Group("/orders")
+		{
+			orders.GET("/open", ordersHandler.GetOpenOrders)
+			orders.GET("/:order_id", ordersHandler.GetOrder)
+		}
+
+		// Account information
+		account := v1.Group("/account")
+		{
+			account.GET("/summary", ordersHandler.GetAccountSummary)
+			account.GET("/balances", ordersHandler.GetBalances)
+			account.GET("/positions", ordersHandler.GetPositions)
+			account.GET("/trades", ordersHandler.GetTradeHistory)
 		}
 	}
 

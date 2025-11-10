@@ -114,12 +114,6 @@ func (p *Paradex) SubscribeKlines(asset portfolio.Asset, interval string) error 
 
 	symbol := p.GetPerpSymbol(asset)
 
-	// Check if already subscribed to trades for this symbol
-	if p.wsService.IsSubscribed("trades", symbol) {
-		p.appLogger.Info("Already subscribed to trades for %s - klines available", asset.Symbol())
-		return nil
-	}
-
 	if err := p.wsService.SubscribeTrades(symbol); err != nil {
 		return fmt.Errorf("failed to subscribe to trades for klines %s: %w", asset.Symbol(), err)
 	}
