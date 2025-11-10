@@ -2,7 +2,10 @@ package requests
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 
 	"github.com/trishtzy/go-paradex/client/account"
 	"github.com/trishtzy/go-paradex/models"
@@ -56,4 +59,77 @@ func (s *Service) GetUserPositions(ctx context.Context) (*models.ResponsesGetPos
 		return nil, fmt.Errorf("failed to get user orders: %w", err)
 	}
 	return resp.Payload, nil
+}
+
+func (s *Service) GetSubAccounts(ctx context.Context) (*models.ResponsesGetSubAccountsResponse, error) {
+	params := account.NewGetSubAccountsParams().WithContext(ctx)
+	resp, err := s.client.API().Account.GetSubAccounts(params, s.client.AuthWriter(ctx))
+	if err != nil {
+		return nil, fmt.Errorf("failed to get sub-accounts: %w", err)
+	}
+	return resp.Payload, nil
+}
+
+// AccountInfoResponse is a custom response type to work around SDK bug
+// The SDK has Kind as a nested struct, but API returns it as a plain string
+type AccountInfoResponse struct {
+	Account        string `json:"account,omitempty"`
+	CreatedAt      int64  `json:"created_at,omitempty"`
+	DerivationPath string `json:"derivation_path,omitempty"`
+	IsolatedMarket string `json:"isolated_market,omitempty"`
+	Kind           string `json:"kind,omitempty"` // Fixed: should be string, not struct
+	ParentAccount  string `json:"parent_account,omitempty"`
+	PublicKey      string `json:"public_key,omitempty"`
+	Username       string `json:"username,omitempty"`
+}
+
+type GetAccountsInfoResponse struct {
+	Results []*AccountInfoResponse `json:"results"`
+}
+
+func (s *Service) GetAccountInfo(ctx context.Context) (*GetAccountsInfoResponse, error) {
+	// Make raw HTTP request to work around SDK bug with Kind field
+	// The SDK expects Kind to be a nested struct, but API returns it as a string
+
+	// Get the base URL from the API transport
+	baseURL := "https://api.prod.paradex.trade/v1"
+
+	// Create HTTP request
+	req, err := http.NewRequestWithContext(ctx, "GET", baseURL+"/account/info", nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	// Add authentication headers
+	authHeaders := s.client.GetAuthHeaders()
+	for key, value := range authHeaders {
+		req.Header.Set(key, value)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	// Make the request
+	httpClient := &http.Client{}
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Read response body
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(body))
+	}
+
+	// Parse response
+	var result GetAccountsInfoResponse
+	if err := json.Unmarshal(body, &result); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
+	}
+
+	return &result, nil
 }

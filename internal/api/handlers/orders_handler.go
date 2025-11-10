@@ -179,3 +179,57 @@ func (h *OrdersHandler) GetTradeHistory(c *gin.Context) {
 
 	c.JSON(http.StatusOK, trades)
 }
+
+// GetSubAccounts retrieves sub-accounts
+// GET /api/account/sub-accounts
+func (h *OrdersHandler) GetSubAccounts(c *gin.Context) {
+	api, err := h.getOrderAPI()
+	if err != nil || api == nil {
+		c.JSON(http.StatusNotImplemented, gin.H{"error": "Exchange does not support sub-accounts API"})
+		return
+	}
+
+	// Type assert to check if exchange supports GetSubAccounts
+	type SubAccountsAPI interface {
+		GetSubAccounts(context.Context) (interface{}, error)
+	}
+
+	if subAccountsAPI, ok := api.(SubAccountsAPI); ok {
+		subAccounts, err := subAccountsAPI.GetSubAccounts(c.Request.Context())
+		if err != nil {
+			h.logger.Error("Failed to get sub-accounts", zap.Error(err))
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, subAccounts)
+	} else {
+		c.JSON(http.StatusNotImplemented, gin.H{"error": "Exchange does not support sub-accounts"})
+	}
+}
+
+// GetAccountInfo retrieves account information
+// GET /api/account/info
+func (h *OrdersHandler) GetAccountInfo(c *gin.Context) {
+	api, err := h.getOrderAPI()
+	if err != nil || api == nil {
+		c.JSON(http.StatusNotImplemented, gin.H{"error": "Exchange does not support account info API"})
+		return
+	}
+
+	// Type assert to check if exchange supports GetAccountInfo
+	type AccountInfoAPI interface {
+		GetAccountInfo(context.Context) (interface{}, error)
+	}
+
+	if accountInfoAPI, ok := api.(AccountInfoAPI); ok {
+		accountInfo, err := accountInfoAPI.GetAccountInfo(c.Request.Context())
+		if err != nil {
+			h.logger.Error("Failed to get account info", zap.Error(err))
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, accountInfo)
+	} else {
+		c.JSON(http.StatusNotImplemented, gin.H{"error": "Exchange does not support account info"})
+	}
+}

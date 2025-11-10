@@ -89,6 +89,8 @@ func SetupRouter(
 			account.GET("/balances", ordersHandler.GetBalances)
 			account.GET("/positions", ordersHandler.GetPositions)
 			account.GET("/trades", ordersHandler.GetTradeHistory)
+			account.GET("/sub-accounts", ordersHandler.GetSubAccounts)
+			account.GET("/info", ordersHandler.GetAccountInfo)
 		}
 	}
 

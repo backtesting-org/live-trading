@@ -1,6 +1,7 @@
 package paradex
 
 import (
+	"context"
 	"time"
 
 	"github.com/backtesting-org/kronos-sdk/pkg/types/connector"
@@ -75,4 +76,14 @@ func (p *Paradex) GetPositions() ([]connector.Position, error) {
 	}
 
 	return result, nil
+}
+
+// GetSubAccounts returns all sub-accounts for the current account
+func (p *Paradex) GetSubAccounts(ctx context.Context) (interface{}, error) {
+	return p.paradexService.GetSubAccounts(ctx)
+}
+
+// GetAccountInfo returns account information
+func (p *Paradex) GetAccountInfo(ctx context.Context) (interface{}, error) {
+	return p.paradexService.GetAccountInfo(ctx)
 }
