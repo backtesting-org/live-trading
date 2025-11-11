@@ -410,6 +410,26 @@ func (r *Repository) GetActiveRun(ctx context.Context, pluginID uuid.UUID) (*Str
 	return &run, nil
 }
 
+// GetActiveRuns retrieves all currently running strategies
+func (r *Repository) GetActiveRuns(ctx context.Context) ([]StrategyRun, error) {
+	var runs []StrategyRun
+	query := `
+		SELECT id, plugin_id, config_id, status, start_time, end_time,
+		       total_signals, total_trades, profit_loss, error_count,
+		       error_message, cpu_usage, memory_usage, created_at, updated_at
+		FROM strategy_runs
+		WHERE status = $1
+		ORDER BY start_time DESC
+	`
+
+	err := r.db.SelectContext(ctx, &runs, query, RunStatusRunning)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get active runs: %w", err)
+	}
+
+	return runs, nil
+}
+
 // UpdateRun updates a strategy run
 func (r *Repository) UpdateRun(ctx context.Context, run *StrategyRun) error {
 	query := `

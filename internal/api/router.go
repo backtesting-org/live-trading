@@ -16,6 +16,7 @@ func SetupRouter(
 	pluginHandler *handlers.PluginHandler,
 	strategyHandler *handlers.StrategyHandler,
 	ordersHandler *handlers.OrdersHandler,
+	dashboardHandler *handlers.DashboardHandler,
 	wsHandler *websocket.Handler,
 	logger *zap.Logger,
 	corsAllowOrigin string,
@@ -91,6 +92,12 @@ func SetupRouter(
 			account.GET("/trades", ordersHandler.GetTradeHistory)
 			account.GET("/sub-accounts", ordersHandler.GetSubAccounts)
 			account.GET("/info", ordersHandler.GetAccountInfo)
+		}
+
+		// Dashboard
+		dashboard := v1.Group("/dashboard")
+		{
+			dashboard.GET("/stats", dashboardHandler.GetDashboardStats)
 		}
 	}
 
