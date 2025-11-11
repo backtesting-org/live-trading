@@ -16,6 +16,7 @@ type Position struct {
 	Quantity   decimal.Decimal
 	EntryPrice decimal.Decimal
 	OrderID    string
+	RunID      string          // Strategy run ID that opened this position
 }
 
 // TradePerformance tracks P&L metrics per strategy run
@@ -87,7 +88,7 @@ func (pm *PositionManager) CheckRiskLimits(action strategy.TradeAction) error {
 }
 
 // UpdatePosition updates position state after trade execution
-func (pm *PositionManager) UpdatePosition(action strategy.TradeAction, orderID string) {
+func (pm *PositionManager) UpdatePosition(action strategy.TradeAction, orderID string, runID string) {
 	pm.mu.Lock()
 	defer pm.mu.Unlock()
 
@@ -109,6 +110,7 @@ func (pm *PositionManager) UpdatePosition(action strategy.TradeAction, orderID s
 				Quantity:   action.Quantity,
 				EntryPrice: action.Price,
 				OrderID:    orderID,
+				RunID:      runID,
 			}
 		}
 
@@ -154,6 +156,29 @@ func (pm *PositionManager) GetAllPositions() map[string]*Position {
 			Quantity:   v.Quantity,
 			EntryPrice: v.EntryPrice,
 			OrderID:    v.OrderID,
+			RunID:      v.RunID,
+		}
+	}
+
+	return positions
+}
+
+// GetPositionsByRunID returns all positions for a specific strategy run
+func (pm *PositionManager) GetPositionsByRunID(runID string) []*Position {
+	pm.mu.RLock()
+	defer pm.mu.RUnlock()
+
+	positions := make([]*Position, 0)
+	for _, v := range pm.positions {
+		if v.RunID == runID {
+			positions = append(positions, &Position{
+				Asset:      v.Asset,
+				Exchange:   v.Exchange,
+				Quantity:   v.Quantity,
+				EntryPrice: v.EntryPrice,
+				OrderID:    v.OrderID,
+				RunID:      v.RunID,
+			})
 		}
 	}
 

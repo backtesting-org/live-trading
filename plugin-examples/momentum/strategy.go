@@ -165,9 +165,9 @@ func NewStrategy() strategy.Strategy {
 	return NewMomentumStrategy(
 		nil, // Kronos not needed for metadata
 		MomentumConfig{
-			BuyThreshold:  decimal.NewFromFloat(0.1),  // 0.1% = ~$104 move on BTC at 104k
-			SellThreshold: decimal.NewFromFloat(-0.1), // -0.1% = ~$104 move down
-			OrderQuantity: decimal.NewFromFloat(0.01),
+			BuyThreshold:  decimal.NewFromFloat(0.04),
+			SellThreshold: decimal.NewFromFloat(-0.04),
+			OrderQuantity: decimal.NewFromFloat(0.001),
 			KlineInterval: "5m",
 			KlineLimit:    20,
 		},
