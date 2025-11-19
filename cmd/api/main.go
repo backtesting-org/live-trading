@@ -30,27 +30,38 @@ import (
 func main() {
 	app := fx.New(
 		fx.Provide(
+			// Config
 			config.LoadConfig,
+
+			// Infrastructure
 			provideLogger,
 			provideRepository,
+			services.NewLiveTimeProvider,
+			services.NewMemoryStore,
+
+			// Exchange
 			provideParadexConfig,
 			provideConnectorRegistry,
 			provideConnector,
-			provideTimeProvider,
-			provideStore,
-			provideTradingLogger,
+
+			// Services
 			services.NewEventBus,
 			services.NewPluginManager,
 			services.NewPositionManager,
 			services.NewKronosProvider,
+			services.NewTradingLogger,
 			provideMarketDataFeed,
-			provideTradeExecutor,
+			services.NewTradeExecutor,
 			services.NewStrategyExecutor,
+
+			// Handlers
 			handlers.NewPluginHandler,
 			handlers.NewStrategyHandler,
 			handlers.NewOrdersHandler,
 			handlers.NewDashboardHandler,
 			websocket.NewHandler,
+
+			// HTTP
 			provideHTTPServer,
 		),
 		fx.Invoke(
@@ -207,10 +218,6 @@ func onboardParadexAccount(logger *zap.Logger) error {
 	return nil
 }
 
-func provideTimeProvider() temporal.TimeProvider {
-	return services.NewLiveTimeProvider()
-}
-
 func provideMarketDataFeed(
 	conn connector.Connector,
 	store market.MarketData,
@@ -227,25 +234,6 @@ func provideMarketDataFeed(
 		exchangeName = connector.Paradex
 	}
 	return services.NewMarketDataFeed(conn, store, logger, exchangeName, timeProvider)
-}
-
-func provideTradeExecutor(
-	conn connector.Connector,
-	positionManager *services.PositionManager,
-	repo *database.Repository,
-	eventBus *services.EventBus,
-	logger *zap.Logger,
-	timeProvider temporal.TimeProvider,
-) *services.TradeExecutor {
-	return services.NewTradeExecutor(conn, positionManager, repo, eventBus, logger, timeProvider)
-}
-
-func provideStore(timeProvider temporal.TimeProvider) market.MarketData {
-	return services.NewMemoryStore(timeProvider)
-}
-
-func provideTradingLogger(logger *zap.Logger) logging.TradingLogger {
-	return services.NewTradingLogger(logger)
 }
 
 func provideHTTPServer(
