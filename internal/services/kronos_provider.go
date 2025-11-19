@@ -4,23 +4,23 @@ import (
 	"github.com/backtesting-org/kronos-sdk/pkg/kronos"
 	"github.com/backtesting-org/kronos-sdk/pkg/kronos/analytics"
 	"github.com/backtesting-org/kronos-sdk/pkg/kronos/indicators"
-	"github.com/backtesting-org/kronos-sdk/pkg/kronos/market"
+	kronosmarket "github.com/backtesting-org/kronos-sdk/pkg/kronos/market"
 	"github.com/backtesting-org/kronos-sdk/pkg/kronos/signal"
 	"github.com/backtesting-org/kronos-sdk/pkg/types/logging"
-	"github.com/backtesting-org/kronos-sdk/pkg/types/portfolio/store"
+	"github.com/backtesting-org/kronos-sdk/pkg/types/stores/market"
 	"go.uber.org/zap"
 )
 
 // KronosProvider creates Kronos context instances for strategies
 type KronosProvider struct {
-	store         store.Store
+	store         market.MarketData
 	tradingLogger logging.TradingLogger
 	logger        *zap.Logger
 }
 
 // NewKronosProvider creates a new Kronos provider
 func NewKronosProvider(
-	store store.Store,
+	store market.MarketData,
 	tradingLogger logging.TradingLogger,
 	logger *zap.Logger,
 ) *KronosProvider {
@@ -38,7 +38,7 @@ func (kp *KronosProvider) CreateKronos() *kronos.Kronos {
 
 	// Create service instances
 	indicatorService := indicators.NewIndicatorService(kp.store)
-	marketService := market.NewMarketService(kp.store)
+	marketService := kronosmarket.NewMarketService(kp.store)
 	analyticsService := analytics.NewAnalyticsService(kp.store)
 	signalService := signal.NewService(timeProvider)
 

@@ -10,7 +10,7 @@ import (
 
 	"github.com/backtesting-org/kronos-sdk/pkg/types/connector"
 	"github.com/backtesting-org/kronos-sdk/pkg/types/logging"
-	"github.com/backtesting-org/kronos-sdk/pkg/types/portfolio/store"
+	"github.com/backtesting-org/kronos-sdk/pkg/types/stores/market"
 	"github.com/backtesting-org/kronos-sdk/pkg/types/temporal"
 	exchange "github.com/backtesting-org/live-trading/config/exchanges"
 	"github.com/backtesting-org/live-trading/external/exchanges/paradex"
@@ -213,7 +213,7 @@ func provideTimeProvider() temporal.TimeProvider {
 
 func provideMarketDataFeed(
 	conn connector.Connector,
-	store store.Store,
+	store market.MarketData,
 	cfg *config.Config,
 	logger *zap.Logger,
 	timeProvider temporal.TimeProvider,
@@ -240,7 +240,7 @@ func provideTradeExecutor(
 	return services.NewTradeExecutor(conn, positionManager, repo, eventBus, logger, timeProvider)
 }
 
-func provideStore(timeProvider temporal.TimeProvider) store.Store {
+func provideStore(timeProvider temporal.TimeProvider) market.MarketData {
 	return services.NewMemoryStore(timeProvider)
 }
 

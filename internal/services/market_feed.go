@@ -8,7 +8,7 @@ import (
 
 	"github.com/backtesting-org/kronos-sdk/pkg/types/connector"
 	"github.com/backtesting-org/kronos-sdk/pkg/types/portfolio"
-	"github.com/backtesting-org/kronos-sdk/pkg/types/portfolio/store"
+	"github.com/backtesting-org/kronos-sdk/pkg/types/stores/market"
 	"go.uber.org/zap"
 	"github.com/backtesting-org/kronos-sdk/pkg/types/temporal"
 )
@@ -17,7 +17,7 @@ import (
 type MarketDataFeed struct {
 	connector connector.Connector // Exchange-agnostic connector
 	wsConn    connector.WebSocketConnector // Optional WebSocket connector
-	store     store.Store
+	store     market.MarketData
 	logger    *zap.Logger
 	timeProvider temporal.TimeProvider
 
@@ -37,7 +37,7 @@ type MarketDataFeed struct {
 // NewMarketDataFeed creates a new market data feed service
 func NewMarketDataFeed(
 	conn connector.Connector,
-	store store.Store,
+	store market.MarketData,
 	logger *zap.Logger,
 	exchangeName connector.ExchangeName,
 	timeProvider temporal.TimeProvider,

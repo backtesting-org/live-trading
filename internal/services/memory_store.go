@@ -6,19 +6,19 @@ import (
 
 	"github.com/backtesting-org/kronos-sdk/pkg/types/connector"
 	"github.com/backtesting-org/kronos-sdk/pkg/types/portfolio"
-	"github.com/backtesting-org/kronos-sdk/pkg/types/portfolio/store"
+	"github.com/backtesting-org/kronos-sdk/pkg/types/stores/market"
 	"github.com/backtesting-org/kronos-sdk/pkg/types/temporal"
 )
 
 // MemoryStore implements the Store interface with in-memory storage
 type MemoryStore struct {
 	mu                     sync.RWMutex
-	fundingRates           map[portfolio.Asset]store.FundingRateMap
-	historicalFundingRates map[portfolio.Asset]store.HistoricalFundingMap
-	orderBooks             map[portfolio.Asset]store.OrderBookMap
-	assetPrices            map[portfolio.Asset]store.PriceMap
-	klines                 map[portfolio.Asset]store.KlineMap
-	lastUpdated            store.LastUpdatedMap
+	fundingRates           map[portfolio.Asset]market.FundingRateMap
+	historicalFundingRates map[portfolio.Asset]market.HistoricalFundingMap
+	orderBooks             map[portfolio.Asset]market.OrderBookMap
+	assetPrices            map[portfolio.Asset]market.PriceMap
+	klines                 map[portfolio.Asset]market.KlineMap
+	lastUpdated            market.LastUpdatedMap
 	notifier               func()
 	timeProvider           temporal.TimeProvider
 }
@@ -26,12 +26,12 @@ type MemoryStore struct {
 // NewMemoryStore creates a new in-memory store
 func NewMemoryStore(timeProvider temporal.TimeProvider) *MemoryStore {
 	return &MemoryStore{
-		fundingRates:           make(map[portfolio.Asset]store.FundingRateMap),
-		historicalFundingRates: make(map[portfolio.Asset]store.HistoricalFundingMap),
-		orderBooks:             make(map[portfolio.Asset]store.OrderBookMap),
-		assetPrices:            make(map[portfolio.Asset]store.PriceMap),
-		klines:                 make(map[portfolio.Asset]store.KlineMap),
-		lastUpdated:            make(store.LastUpdatedMap),
+		fundingRates:           make(map[portfolio.Asset]market.FundingRateMap),
+		historicalFundingRates: make(map[portfolio.Asset]market.HistoricalFundingMap),
+		orderBooks:             make(map[portfolio.Asset]market.OrderBookMap),
+		assetPrices:            make(map[portfolio.Asset]market.PriceMap),
+		klines:                 make(map[portfolio.Asset]market.KlineMap),
+		lastUpdated:            make(market.LastUpdatedMap),
 		timeProvider:           timeProvider,
 	}
 }
@@ -41,12 +41,12 @@ func (ms *MemoryStore) UpdateFundingRate(asset portfolio.Asset, exchangeName con
 	defer ms.mu.Unlock()
 
 	if ms.fundingRates[asset] == nil {
-		ms.fundingRates[asset] = make(store.FundingRateMap)
+		ms.fundingRates[asset] = make(market.FundingRateMap)
 	}
 	ms.fundingRates[asset][exchangeName] = rate
 
-	ms.UpdateLastUpdated(store.UpdateKey{
-		DataType: store.DataKeyFundingRates,
+	ms.UpdateLastUpdated(market.UpdateKey{
+		DataType: market.DataKeyFundingRates,
 		Asset:    asset,
 		Exchange: exchangeName,
 	})
@@ -58,12 +58,12 @@ func (ms *MemoryStore) UpdateFundingRates(exchangeName connector.ExchangeName, r
 
 	for asset, rate := range rates {
 		if ms.fundingRates[asset] == nil {
-			ms.fundingRates[asset] = make(store.FundingRateMap)
+			ms.fundingRates[asset] = make(market.FundingRateMap)
 		}
 		ms.fundingRates[asset][exchangeName] = rate
 
-		ms.lastUpdated[store.UpdateKey{
-			DataType: store.DataKeyFundingRates,
+		ms.lastUpdated[market.UpdateKey{
+			DataType: market.DataKeyFundingRates,
 			Asset:    asset,
 			Exchange: exchangeName,
 		}] = ms.timeProvider.Now()
@@ -74,7 +74,7 @@ func (ms *MemoryStore) UpdateFundingRates(exchangeName connector.ExchangeName, r
 	}
 }
 
-func (ms *MemoryStore) GetFundingRatesForAsset(asset portfolio.Asset) store.FundingRateMap {
+func (ms *MemoryStore) GetFundingRatesForAsset(asset portfolio.Asset) market.FundingRateMap {
 	ms.mu.RLock()
 	defer ms.mu.RUnlock()
 	return ms.fundingRates[asset]
@@ -108,18 +108,18 @@ func (ms *MemoryStore) UpdateHistoricalFundingRates(asset portfolio.Asset, excha
 	defer ms.mu.Unlock()
 
 	if ms.historicalFundingRates[asset] == nil {
-		ms.historicalFundingRates[asset] = make(store.HistoricalFundingMap)
+		ms.historicalFundingRates[asset] = make(market.HistoricalFundingMap)
 	}
 	ms.historicalFundingRates[asset][exchangeName] = rates
 
-	ms.lastUpdated[store.UpdateKey{
-		DataType: store.DataKeyHistoricalFunding,
+	ms.lastUpdated[market.UpdateKey{
+		DataType: market.DataKeyHistoricalFunding,
 		Asset:    asset,
 		Exchange: exchangeName,
 	}] = ms.timeProvider.Now()
 }
 
-func (ms *MemoryStore) GetHistoricalFundingRatesForAsset(asset portfolio.Asset) store.HistoricalFundingMap {
+func (ms *MemoryStore) GetHistoricalFundingRatesForAsset(asset portfolio.Asset) market.HistoricalFundingMap {
 	ms.mu.RLock()
 	defer ms.mu.RUnlock()
 	return ms.historicalFundingRates[asset]
@@ -130,21 +130,21 @@ func (ms *MemoryStore) UpdateOrderBook(asset portfolio.Asset, exchangeName conne
 	defer ms.mu.Unlock()
 
 	if ms.orderBooks[asset] == nil {
-		ms.orderBooks[asset] = make(store.OrderBookMap)
+		ms.orderBooks[asset] = make(market.OrderBookMap)
 	}
 	if ms.orderBooks[asset][exchangeName] == nil {
 		ms.orderBooks[asset][exchangeName] = make(map[connector.Instrument]*connector.OrderBook)
 	}
 	ms.orderBooks[asset][exchangeName][orderBookType] = &orderBook
 
-	ms.UpdateLastUpdated(store.UpdateKey{
-		DataType: store.DataKeyOrderBooks,
+	ms.UpdateLastUpdated(market.UpdateKey{
+		DataType: market.DataKeyOrderBooks,
 		Asset:    asset,
 		Exchange: exchangeName,
 	})
 }
 
-func (ms *MemoryStore) GetOrderBooks(asset portfolio.Asset) store.OrderBookMap {
+func (ms *MemoryStore) GetOrderBooks(asset portfolio.Asset) market.OrderBookMap {
 	ms.mu.RLock()
 	defer ms.mu.RUnlock()
 	return ms.orderBooks[asset]
@@ -178,12 +178,12 @@ func (ms *MemoryStore) UpdateAssetPrice(asset portfolio.Asset, exchangeName conn
 	defer ms.mu.Unlock()
 
 	if ms.assetPrices[asset] == nil {
-		ms.assetPrices[asset] = make(store.PriceMap)
+		ms.assetPrices[asset] = make(market.PriceMap)
 	}
 	ms.assetPrices[asset][exchangeName] = price
 
-	ms.UpdateLastUpdated(store.UpdateKey{
-		DataType: store.DataKeyAssetPrice,
+	ms.UpdateLastUpdated(market.UpdateKey{
+		DataType: market.DataKeyAssetPrice,
 		Asset:    asset,
 		Exchange: exchangeName,
 	})
@@ -194,13 +194,13 @@ func (ms *MemoryStore) UpdateAssetPrices(asset portfolio.Asset, prices map[conne
 	defer ms.mu.Unlock()
 
 	if ms.assetPrices[asset] == nil {
-		ms.assetPrices[asset] = make(store.PriceMap)
+		ms.assetPrices[asset] = make(market.PriceMap)
 	}
 
 	for exchange, price := range prices {
 		ms.assetPrices[asset][exchange] = price
-		ms.lastUpdated[store.UpdateKey{
-			DataType: store.DataKeyAssetPrice,
+		ms.lastUpdated[market.UpdateKey{
+			DataType: market.DataKeyAssetPrice,
 			Asset:    asset,
 			Exchange: exchange,
 		}] = ms.timeProvider.Now()
@@ -223,7 +223,7 @@ func (ms *MemoryStore) GetAssetPrice(asset portfolio.Asset, exchangeName connect
 	return nil
 }
 
-func (ms *MemoryStore) GetAssetPrices(asset portfolio.Asset) store.PriceMap {
+func (ms *MemoryStore) GetAssetPrices(asset portfolio.Asset) market.PriceMap {
 	ms.mu.RLock()
 	defer ms.mu.RUnlock()
 	return ms.assetPrices[asset]
@@ -234,7 +234,7 @@ func (ms *MemoryStore) UpdateKline(asset portfolio.Asset, exchangeName connector
 	defer ms.mu.Unlock()
 
 	if ms.klines[asset] == nil {
-		ms.klines[asset] = make(store.KlineMap)
+		ms.klines[asset] = make(market.KlineMap)
 	}
 	if ms.klines[asset][exchangeName] == nil {
 		ms.klines[asset][exchangeName] = make(map[string][]connector.Kline)
@@ -259,8 +259,8 @@ func (ms *MemoryStore) UpdateKline(asset portfolio.Asset, exchangeName connector
 
 	ms.klines[asset][exchangeName][interval] = klines
 
-	ms.UpdateLastUpdated(store.UpdateKey{
-		DataType: store.DataKeyKlines,
+	ms.UpdateLastUpdated(market.UpdateKey{
+		DataType: market.DataKeyKlines,
 		Asset:    asset,
 		Exchange: exchangeName,
 	})
@@ -309,13 +309,13 @@ func (ms *MemoryStore) SetOrchestratorNotifier(notifier func()) {
 	ms.notifier = notifier
 }
 
-func (ms *MemoryStore) GetLastUpdated() store.LastUpdatedMap {
+func (ms *MemoryStore) GetLastUpdated() market.LastUpdatedMap {
 	ms.mu.RLock()
 	defer ms.mu.RUnlock()
 	return ms.lastUpdated
 }
 
-func (ms *MemoryStore) UpdateLastUpdated(key store.UpdateKey) {
+func (ms *MemoryStore) UpdateLastUpdated(key market.UpdateKey) {
 	// Must be called with lock held
 	ms.lastUpdated[key] = ms.timeProvider.Now()
 	if ms.notifier != nil {
@@ -327,10 +327,10 @@ func (ms *MemoryStore) Clear() {
 	ms.mu.Lock()
 	defer ms.mu.Unlock()
 
-	ms.fundingRates = make(map[portfolio.Asset]store.FundingRateMap)
-	ms.historicalFundingRates = make(map[portfolio.Asset]store.HistoricalFundingMap)
-	ms.orderBooks = make(map[portfolio.Asset]store.OrderBookMap)
-	ms.assetPrices = make(map[portfolio.Asset]store.PriceMap)
-	ms.klines = make(map[portfolio.Asset]store.KlineMap)
-	ms.lastUpdated = make(store.LastUpdatedMap)
+	ms.fundingRates = make(map[portfolio.Asset]market.FundingRateMap)
+	ms.historicalFundingRates = make(map[portfolio.Asset]market.HistoricalFundingMap)
+	ms.orderBooks = make(map[portfolio.Asset]market.OrderBookMap)
+	ms.assetPrices = make(map[portfolio.Asset]market.PriceMap)
+	ms.klines = make(map[portfolio.Asset]market.KlineMap)
+	ms.lastUpdated = make(market.LastUpdatedMap)
 }
