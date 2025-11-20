@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/backtesting-org/live-trading/internal/database"
-	"github.com/backtesting-org/live-trading/internal/services"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
 )
@@ -16,7 +15,6 @@ func RegisterLifecycle(
 	lc fx.Lifecycle,
 	server *http.Server,
 	repo *database.Repository,
-	eventBus *services.EventBus,
 	logger *zap.Logger,
 ) {
 	lc.Append(fx.Hook{
@@ -42,8 +40,6 @@ func RegisterLifecycle(
 			if err := server.Shutdown(shutdownCtx); err != nil {
 				logger.Error("Server forced to shutdown", zap.Error(err))
 			}
-
-			eventBus.Close()
 
 			if err := repo.Close(); err != nil {
 				logger.Error("Failed to close database connection", zap.Error(err))
