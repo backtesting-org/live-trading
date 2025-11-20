@@ -3,9 +3,8 @@ package main
 import (
 	"time"
 
-	"github.com/backtesting-org/kronos-sdk/pkg/kronos"
+	"github.com/backtesting-org/kronos-sdk/kronos"
 	"github.com/backtesting-org/kronos-sdk/pkg/types/connector"
-	"github.com/backtesting-org/kronos-sdk/pkg/types/portfolio"
 	"github.com/backtesting-org/kronos-sdk/pkg/types/strategy"
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
@@ -14,7 +13,7 @@ import (
 // GridStrategy implements grid trading using Kronos SDK
 type GridStrategy struct {
 	*strategy.BaseStrategy
-	k      kronos.Kronos
+	k      *kronos.KronosExecutor
 	config GridConfig
 }
 
@@ -28,7 +27,7 @@ type GridConfig struct {
 }
 
 // NewGridStrategy creates a new grid strategy instance
-func NewGridStrategy(k kronos.Kronos, config GridConfig) *GridStrategy {
+func NewGridStrategy(k *kronos.KronosExecutor, config GridConfig) *GridStrategy {
 	base := strategy.NewBaseStrategy(
 		strategy.StrategyName("Grid Trading"),
 		"Market-neutral grid trading strategy",
@@ -204,11 +203,6 @@ func (gs *GridStrategy) createSellSignal(
 		},
 		Timestamp: time.Now(),
 	}
-}
-
-// GetRequiredAssets returns the assets required by this strategy
-func (gs *GridStrategy) GetRequiredAssets() []strategy.RequiredAsset {
-	return []strategy.RequiredAsset{{Symbol: portfolio.NewAsset("BTC")}}
 }
 
 // NewStrategy creates a new strategy instance for plugin loading

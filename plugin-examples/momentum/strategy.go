@@ -169,14 +169,6 @@ func (ms *MomentumStrategy) createSignal(
 	}
 }
 
-// GetRequiredAssets returns the assets required by this strategy
-func (ms *MomentumStrategy) GetRequiredAssets() []strategy.RequiredAsset {
-	return []strategy.RequiredAsset{
-		{Symbol: portfolio.NewAsset("BTC")},
-		{Symbol: portfolio.NewAsset("ETH")},
-	}
-}
-
 // NewStrategy creates a new strategy instance for plugin loading
 // This is called by the plugin manager to extract metadata
 func NewStrategy() strategy.Strategy {

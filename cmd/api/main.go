@@ -1,13 +1,12 @@
 package main
 
 import (
-	"github.com/backtesting-org/kronos-sdk/pkg/kronos"
+	"github.com/backtesting-org/kronos-sdk/kronos"
 	exchange "github.com/backtesting-org/live-trading/config/exchanges"
 	externalConnectors "github.com/backtesting-org/live-trading/external/connectors"
 	"github.com/backtesting-org/live-trading/internal/config"
 	"github.com/backtesting-org/live-trading/internal/database"
 	"github.com/backtesting-org/live-trading/internal/infrastructure"
-	"github.com/backtesting-org/live-trading/internal/services"
 	"go.uber.org/fx"
 )
 
@@ -26,7 +25,7 @@ func main() {
 		database.Module,
 
 		// === Services ===
-		services.Module,
+		// services.Module,
 
 		// === Exchange Configs ===
 		exchange.Module,
