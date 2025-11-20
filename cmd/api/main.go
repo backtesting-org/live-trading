@@ -4,7 +4,6 @@ import (
 	"github.com/backtesting-org/kronos-sdk/kronos"
 	exchange "github.com/backtesting-org/live-trading/config/exchanges"
 	externalConnectors "github.com/backtesting-org/live-trading/external/connectors"
-	"github.com/backtesting-org/live-trading/internal/api"
 	"github.com/backtesting-org/live-trading/internal/config"
 	"github.com/backtesting-org/live-trading/internal/database"
 	"github.com/backtesting-org/live-trading/internal/infrastructure"
@@ -34,8 +33,5 @@ func main() {
 
 		// === Connectors (auto-register to SDK registry) ===
 		externalConnectors.Module,
-
-		// === HTTP API (handlers, routes, server) ===
-		api.Module,
 	).Run()
 }

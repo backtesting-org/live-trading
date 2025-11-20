@@ -3,10 +3,11 @@ package paradex
 import (
 	"context"
 	"fmt"
+	"time"
+
 	"github.com/backtesting-org/kronos-sdk/pkg/types/connector"
 	"github.com/backtesting-org/live-trading/external/connectors/paradex/requests"
 	"github.com/shopspring/decimal"
-	"time"
 )
 
 func (p *Paradex) PlaceLimitOrder(symbol string, side connector.OrderSide, quantity, price decimal.Decimal) (*connector.OrderResponse, error) {
