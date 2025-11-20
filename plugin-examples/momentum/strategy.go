@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/backtesting-org/kronos-sdk/pkg/kronos"
+	kronosTypes "github.com/backtesting-org/kronos-sdk/pkg/types/kronos"
 	"github.com/backtesting-org/kronos-sdk/pkg/types/connector"
 	"github.com/backtesting-org/kronos-sdk/pkg/types/strategy"
 	"github.com/google/uuid"
@@ -14,12 +14,12 @@ import (
 // MomentumStrategy implements momentum trading using Kronos SDK
 type MomentumStrategy struct {
 	*strategy.BaseStrategy
-	k      *kronos.Kronos
+	k      kronosTypes.Kronos
 	config MomentumConfig
 }
 
 // SetKronos injects the Kronos context at runtime
-func (ms *MomentumStrategy) SetKronos(k *kronos.Kronos) { ms.k = k }
+func (ms *MomentumStrategy) SetKronos(k kronosTypes.Kronos) { ms.k = k }
 
 // MomentumConfig holds momentum strategy parameters
 type MomentumConfig struct {
@@ -31,7 +31,7 @@ type MomentumConfig struct {
 }
 
 // NewMomentumStrategy creates a new momentum strategy instance
-func NewMomentumStrategy(k *kronos.Kronos, config MomentumConfig) *MomentumStrategy {
+func NewMomentumStrategy(k kronosTypes.Kronos, config MomentumConfig) *MomentumStrategy {
 	base := strategy.NewBaseStrategy(
 		strategy.Momentum,
 		"Kline-based price momentum strategy",

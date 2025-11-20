@@ -3,7 +3,7 @@ package main
 import (
 	"time"
 
-	"github.com/backtesting-org/kronos-sdk/pkg/kronos"
+	kronosTypes "github.com/backtesting-org/kronos-sdk/pkg/types/kronos"
 	"github.com/backtesting-org/kronos-sdk/pkg/types/connector"
 	"github.com/backtesting-org/kronos-sdk/pkg/types/strategy"
 	"github.com/google/uuid"
@@ -13,12 +13,12 @@ import (
 // GridStrategy implements grid trading using Kronos SDK
 type GridStrategy struct {
 	*strategy.BaseStrategy
-	k      *kronos.Kronos
+	k      kronosTypes.Kronos
 	config GridConfig
 }
 
 // SetKronos injects the Kronos context at runtime
-func (gs *GridStrategy) SetKronos(k *kronos.Kronos) { gs.k = k }
+func (gs *GridStrategy) SetKronos(k kronosTypes.Kronos) { gs.k = k }
 
 // GridConfig holds grid trading parameters
 type GridConfig struct {
@@ -30,7 +30,7 @@ type GridConfig struct {
 }
 
 // NewGridStrategy creates a new grid strategy instance
-func NewGridStrategy(k *kronos.Kronos, config GridConfig) *GridStrategy {
+func NewGridStrategy(k kronosTypes.Kronos, config GridConfig) *GridStrategy {
 	base := strategy.NewBaseStrategy(
 		strategy.StrategyName("Grid Trading"),
 		"Market-neutral grid trading strategy",

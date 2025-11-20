@@ -6,8 +6,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/backtesting-org/kronos-sdk/pkg/events"
 	"github.com/backtesting-org/kronos-sdk/pkg/types/temporal"
-	"github.com/backtesting-org/live-trading/internal/services"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 	"go.uber.org/zap"
@@ -24,7 +24,7 @@ var upgrader = websocket.Upgrader{
 
 // Handler handles WebSocket connections
 type Handler struct {
-	eventBus *services.EventBus
+	eventBus events.EventBus
 	logger   *zap.Logger
 	clients  map[*Client]bool
 	mu       sync.RWMutex
@@ -41,7 +41,7 @@ type Client struct {
 }
 
 // NewHandler creates a new WebSocket handler
-func NewHandler(eventBus *services.EventBus, logger *zap.Logger, timeProvider temporal.TimeProvider) *Handler {
+func NewHandler(eventBus events.EventBus, logger *zap.Logger, timeProvider temporal.TimeProvider) *Handler {
 	return &Handler{
 		eventBus: eventBus,
 		logger:   logger,
@@ -83,7 +83,12 @@ func (h *Handler) HandleConnection(c *gin.Context) {
 }
 
 // BroadcastEvent broadcasts an event to all connected clients
-func (h *Handler) BroadcastEvent(event services.Event) {
+func (h *Handler) BroadcastEvent(topic string, data interface{}) {
+	event := map[string]interface{}{
+		"type": topic,
+		"data": data,
+	}
+
 	message, err := json.Marshal(event)
 	if err != nil {
 		h.logger.Error("Failed to marshal event", zap.Error(err))
@@ -106,14 +111,16 @@ func (h *Handler) BroadcastEvent(event services.Event) {
 
 // StartEventListener starts listening for events and broadcasting them
 func (h *Handler) StartEventListener() {
-	// Subscribe to all events
-	eventChan := h.eventBus.SubscribeAll(100)
-
-	go func() {
-		for event := range eventChan {
-			h.BroadcastEvent(event)
-		}
-	}()
+	// Subscribe to all event topics we care about
+	h.eventBus.Subscribe("strategy.started", func(data interface{}) {
+		h.BroadcastEvent("strategy.started", data)
+	})
+	h.eventBus.Subscribe("strategy.stopped", func(data interface{}) {
+		h.BroadcastEvent("strategy.stopped", data)
+	})
+	h.eventBus.Subscribe("signal.generated", func(data interface{}) {
+		h.BroadcastEvent("signal.generated", data)
+	})
 }
 
 // unregisterClient removes a client from the handler

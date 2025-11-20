@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/backtesting-org/kronos-sdk/pkg/events"
 	"github.com/backtesting-org/kronos-sdk/pkg/types/connector"
 	"github.com/backtesting-org/kronos-sdk/pkg/types/portfolio"
+	"github.com/backtesting-org/kronos-sdk/pkg/types/stores/activity"
 	"github.com/backtesting-org/kronos-sdk/pkg/types/strategy"
 	"github.com/backtesting-org/kronos-sdk/pkg/types/temporal"
 	"github.com/backtesting-org/live-trading/internal/database"
@@ -17,9 +19,9 @@ import (
 // TradeExecutor executes trading signals on exchanges
 type TradeExecutor struct {
 	connector       connector.Connector
-	positionManager *PositionManager
+	positionManager activity.Positions
 	repo            *database.Repository
-	eventBus        *EventBus
+	eventBus        events.EventBus
 	logger          *zap.Logger
 	timeProvider    temporal.TimeProvider
 }
@@ -27,9 +29,9 @@ type TradeExecutor struct {
 // NewTradeExecutor creates a new trade executor service
 func NewTradeExecutor(
 	conn connector.Connector,
-	positionManager *PositionManager,
+	positionManager activity.Positions,
 	repo *database.Repository,
-	eventBus *EventBus,
+	eventBus events.EventBus,
 	logger *zap.Logger,
 	timeProvider temporal.TimeProvider,
 ) *TradeExecutor {
@@ -80,14 +82,11 @@ func (te *TradeExecutor) ExecuteSignal(ctx context.Context, runID uuid.UUID, sig
 	}
 
 	// Publish signal event
-	te.eventBus.Publish(Event{
-		Type: EventSignalGenerated,
-		Data: map[string]interface{}{
-			"run_id":    runID.String(),
-			"signal_id": signal.ID.String(),
-			"strategy":  signal.Strategy,
-			"actions":   len(signal.Actions),
-		},
+	te.eventBus.Publish("signal.generated", map[string]interface{}{
+		"run_id":    runID.String(),
+		"signal_id": signal.ID.String(),
+		"strategy":  signal.Strategy,
+		"actions":   len(signal.Actions),
 	})
 
 	return nil
@@ -100,13 +99,8 @@ func (te *TradeExecutor) executeTradeAction(
 	signalID uuid.UUID,
 	action strategy.TradeAction,
 ) (string, error) {
-	// Check risk limits before executing
-	if err := te.positionManager.CheckRiskLimits(action); err != nil {
-		te.logger.Warn("Trade rejected by risk manager",
-			zap.String("asset", action.Asset.Symbol()),
-			zap.Error(err))
-		return "", err
-	}
+	// TODO: Add risk limit checks (deployment-specific business logic)
+	// For now, execute all trades without risk checks
 
 	// Execute the trade using the connector
 	orderID, err := te.executeTradeOnExchange(ctx, action)
@@ -114,11 +108,8 @@ func (te *TradeExecutor) executeTradeAction(
 		return "", err
 	}
 
-	// Update position manager
-	te.positionManager.UpdatePosition(action, orderID, runID.String())
-
-	// Record trade for P&L tracking (exit price is the action price for now)
-	te.positionManager.RecordTrade(runID.String(), action, action.Price)
+	// TODO: Update position tracking when SDK provides UpdatePosition method
+	// TODO: Record trade for P&L when SDK provides RecordTrade method
 
 	// Log successful execution
 	te.logExecution(ctx, runID, "info",

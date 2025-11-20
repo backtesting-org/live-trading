@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/backtesting-org/kronos-sdk/pkg/types/connector"
+	"github.com/backtesting-org/kronos-sdk/pkg/types/stores/activity"
 	"github.com/backtesting-org/live-trading/internal/database"
 	"github.com/backtesting-org/live-trading/internal/services"
 	"github.com/gin-gonic/gin"
@@ -17,7 +18,7 @@ import (
 type DashboardHandler struct {
 	connector        connector.Connector
 	strategyExecutor *services.StrategyExecutor
-	positionManager  *services.PositionManager
+	positionManager  activity.Positions
 	repo             *database.Repository
 	logger           *zap.Logger
 }
@@ -26,7 +27,7 @@ type DashboardHandler struct {
 func NewDashboardHandler(
 	conn connector.Connector,
 	strategyExecutor *services.StrategyExecutor,
-	positionManager *services.PositionManager,
+	positionManager activity.Positions,
 	repo *database.Repository,
 	logger *zap.Logger,
 ) *DashboardHandler {
@@ -179,17 +180,8 @@ func (h *DashboardHandler) populateStrategyData(ctx context.Context, stats *Dash
 			}
 		}
 
-		// Get current position for this strategy
-		positions := h.positionManager.GetPositionsByRunID(run.ID.String())
-		if len(positions) > 0 {
-			// For now, just take the first position
-			pos := positions[0]
-			strategyInfo.CurrentPosition = &PositionInfo{
-				Market:       pos.Asset,
-				Size:         pos.Quantity.String(),
-				AverageEntry: pos.EntryPrice.String(),
-			}
-		}
+		// TODO: Get current position for this strategy when SDK provides GetPositionsByRunID
+		// For now, skip position data
 
 		stats.Strategies.Strategies = append(stats.Strategies.Strategies, strategyInfo)
 	}
@@ -235,18 +227,6 @@ func (h *DashboardHandler) populatePositionData(ctx context.Context, stats *Dash
 }
 
 func (h *DashboardHandler) matchPositionsToStrategies(stats *DashboardStats) {
-	// Create a map of market -> runID from internal positions
-	internalPositions := h.positionManager.GetAllPositions()
-	marketToRunID := make(map[string]string)
-
-	for _, pos := range internalPositions {
-		marketToRunID[pos.Asset] = pos.RunID
-	}
-
-	// Match exchange positions with internal tracking
-	for i := range stats.Positions.Positions {
-		if runID, ok := marketToRunID[stats.Positions.Positions[i].Market]; ok {
-			stats.Positions.Positions[i].StrategyRunID = runID
-		}
-	}
+	// TODO: Match positions to strategies when SDK provides GetAllPositions
+	// For now, skip matching
 }

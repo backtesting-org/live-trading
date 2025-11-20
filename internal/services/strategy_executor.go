@@ -7,6 +7,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/backtesting-org/kronos-sdk/pkg/events"
+	kronosTypes "github.com/backtesting-org/kronos-sdk/pkg/types/kronos"
 	"github.com/backtesting-org/kronos-sdk/pkg/types/strategy"
 	"github.com/backtesting-org/kronos-sdk/pkg/types/temporal"
 	"github.com/backtesting-org/live-trading/internal/database"
@@ -18,13 +20,13 @@ import (
 type StrategyExecutor struct {
 	repo            *database.Repository
 	pluginManager   *PluginManager
-	kronosProvider  *KronosProvider
+	kronos          kronosTypes.Kronos
 	tradeExecutor   *TradeExecutor
 	marketDataFeed  *MarketDataFeed
 	logger          *zap.Logger
 	runningStrategies map[uuid.UUID]*RunningStrategy
 	mu              sync.RWMutex
-	eventBus        *EventBus
+	eventBus        events.EventBus
 	timeProvider    temporal.TimeProvider
 }
 
@@ -54,17 +56,17 @@ type RuntimeStats struct {
 func NewStrategyExecutor(
 	repo *database.Repository,
 	pluginManager *PluginManager,
-	kronosProvider *KronosProvider,
+	kronos kronosTypes.Kronos,
 	tradeExecutor *TradeExecutor,
 	marketDataFeed *MarketDataFeed,
 	logger *zap.Logger,
-	eventBus *EventBus,
+	eventBus events.EventBus,
 	timeProvider temporal.TimeProvider,
 ) *StrategyExecutor {
 	return &StrategyExecutor{
 		repo:              repo,
 		pluginManager:     pluginManager,
-		kronosProvider:    kronosProvider,
+		kronos:            kronos,
 		tradeExecutor:     tradeExecutor,
 		marketDataFeed:    marketDataFeed,
 		logger:            logger,
@@ -95,16 +97,8 @@ func (se *StrategyExecutor) StartStrategy(ctx context.Context, pluginID uuid.UUI
 	}
 
     // Inject Kronos if strategy supports it
-    if se.kronosProvider != nil {
-        if aware, ok := strat.(KronosAware); ok {
-            k := se.kronosProvider.CreateKronos()
-            aware.SetKronos(k)
-
-            // Register core assets for market data feed (per-exchange support)
-            if se.marketDataFeed != nil {
-                se.marketDataFeed.AddAsset(k.Asset("BTC"))
-            }
-        }
+    if aware, ok := strat.(KronosAware); ok {
+        aware.SetKronos(se.kronos)
     }
 
 	// Create run record
@@ -150,13 +144,10 @@ func (se *StrategyExecutor) StartStrategy(ctx context.Context, pluginID uuid.UUI
 	go se.executionLoop(runCtx, running)
 
 	// Publish event
-	se.eventBus.Publish(Event{
-		Type: EventStrategyStarted,
-		Data: map[string]interface{}{
-			"run_id":    run.ID.String(),
-			"plugin_id": pluginID.String(),
-			"timestamp": se.timeProvider.Now(),
-		},
+	se.eventBus.Publish("strategy.started", map[string]interface{}{
+		"run_id":    run.ID.String(),
+		"plugin_id": pluginID.String(),
+		"timestamp": se.timeProvider.Now(),
 	})
 
 	se.logger.Info("Strategy started",
@@ -205,16 +196,13 @@ func (se *StrategyExecutor) StopStrategy(ctx context.Context, runID uuid.UUID) e
 	}
 
 	// Publish event
-	se.eventBus.Publish(Event{
-		Type: EventStrategyStopped,
-		Data: map[string]interface{}{
-			"run_id":    runID.String(),
-			"timestamp": se.timeProvider.Now(),
-			"stats": map[string]interface{}{
-				"total_signals": running.Stats.TotalSignals,
-				"total_trades":  running.Stats.TotalTrades,
-				"error_count":   running.Stats.ErrorCount,
-			},
+	se.eventBus.Publish("strategy.stopped", map[string]interface{}{
+		"run_id":    runID.String(),
+		"timestamp": se.timeProvider.Now(),
+		"stats": map[string]interface{}{
+			"total_signals": running.Stats.TotalSignals,
+			"total_trades":  running.Stats.TotalTrades,
+			"error_count":   running.Stats.ErrorCount,
 		},
 	})
 
@@ -466,19 +454,8 @@ func (se *StrategyExecutor) GetRunStats(ctx context.Context, runID uuid.UUID) (m
 		stats["last_signal"] = nil
 	}
 
-	// Add P&L and win rate from PositionManager
-	perf := se.tradeExecutor.positionManager.GetPerformance(runID.String())
-	winRate := se.tradeExecutor.positionManager.GetWinRate(runID.String())
-
-	// Enhance stats with P&L metrics
-	stats["realized_pnl"] = perf.RealizedPnL.String()
-	stats["unrealized_pnl"] = perf.UnrealizedPnL.String()
-	stats["winning_trades"] = perf.WinningTrades
-	stats["losing_trades"] = perf.LosingTrades
-	stats["win_rate"] = winRate.StringFixed(2) + "%" // e.g., "65.50%"
-	stats["total_volume"] = perf.TotalVolume.String()
-	stats["largest_win"] = perf.LargestWin.String()
-	stats["largest_loss"] = perf.LargestLoss.String()
+	// TODO: Add P&L and win rate when SDK provides GetPerformance/GetWinRate methods
+	// For now, these metrics are calculated separately
 
 	return stats, nil
 }
