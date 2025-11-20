@@ -3,8 +3,7 @@ module github.com/backtesting-org/live-trading
 go 1.24.2
 
 require (
-	github.com/backtesting-org/kronos-sdk v0.0.0-20251120055539-9c38c50fe648
-	github.com/gin-contrib/cors v1.7.6
+	github.com/backtesting-org/kronos-sdk v0.0.1
 	github.com/gin-gonic/gin v1.11.0
 	github.com/go-openapi/runtime v0.29.0
 	github.com/go-openapi/strfmt v0.24.0
@@ -18,7 +17,7 @@ require (
 	github.com/spf13/viper v1.21.0
 	github.com/trishtzy/go-paradex v0.1.3
 	go.uber.org/fx v1.24.0
-	go.uber.org/zap v1.27.0
+	go.uber.org/zap v1.27.1
 )
 
 require (

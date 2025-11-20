@@ -3,7 +3,7 @@ package paradex
 import (
 	"github.com/backtesting-org/kronos-sdk/pkg/types/connector"
 	"github.com/backtesting-org/kronos-sdk/pkg/types/portfolio"
-	websockets "github.com/backtesting-org/live-trading/external/exchanges/paradex/websocket"
+	websockets "github.com/backtesting-org/live-trading/external/connectors/paradex/websocket"
 	padexmodel "github.com/trishtzy/go-paradex/models"
 
 	"github.com/shopspring/decimal"
