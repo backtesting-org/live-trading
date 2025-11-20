@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/backtesting-org/kronos-sdk/pkg/types/connector"
+	"github.com/backtesting-org/kronos-sdk/pkg/types/data/stores/market"
 	"github.com/backtesting-org/kronos-sdk/pkg/types/portfolio"
-	"github.com/backtesting-org/kronos-sdk/pkg/types/stores/market"
 	"go.uber.org/zap"
 	"github.com/backtesting-org/kronos-sdk/pkg/types/temporal"
 )

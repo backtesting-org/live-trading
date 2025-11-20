@@ -9,6 +9,7 @@ import (
 
 	"github.com/backtesting-org/kronos-sdk/pkg/events"
 	kronosTypes "github.com/backtesting-org/kronos-sdk/pkg/types/kronos"
+	plugintypes "github.com/backtesting-org/kronos-sdk/pkg/types/plugin"
 	"github.com/backtesting-org/kronos-sdk/pkg/types/strategy"
 	"github.com/backtesting-org/kronos-sdk/pkg/types/temporal"
 	"github.com/backtesting-org/live-trading/internal/database"
@@ -19,7 +20,7 @@ import (
 // StrategyExecutor manages strategy execution lifecycle
 type StrategyExecutor struct {
 	repo            *database.Repository
-	pluginManager   *PluginManager
+	pluginManager   plugintypes.Manager
 	kronos          kronosTypes.Kronos
 	tradeExecutor   *TradeExecutor
 	marketDataFeed  *MarketDataFeed
@@ -55,7 +56,7 @@ type RuntimeStats struct {
 // NewStrategyExecutor creates a new strategy executor
 func NewStrategyExecutor(
 	repo *database.Repository,
-	pluginManager *PluginManager,
+	pluginManager plugintypes.Manager,
 	kronos kronosTypes.Kronos,
 	tradeExecutor *TradeExecutor,
 	marketDataFeed *MarketDataFeed,
@@ -95,11 +96,6 @@ func (se *StrategyExecutor) StartStrategy(ctx context.Context, pluginID uuid.UUI
 	if err != nil {
 		return uuid.Nil, fmt.Errorf("failed to instantiate strategy: %w", err)
 	}
-
-    // Inject Kronos if strategy supports it
-    if aware, ok := strat.(KronosAware); ok {
-        aware.SetKronos(se.kronos)
-    }
 
 	// Create run record
 	run := &database.StrategyRun{

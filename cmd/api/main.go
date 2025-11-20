@@ -11,18 +11,21 @@ import (
 	// SDK FX module - provides all generic components (stores, events, logging, registry, time, etc.)
 	"github.com/backtesting-org/kronos-sdk/kronos"
 	"github.com/backtesting-org/kronos-sdk/pkg/events"
+	"github.com/backtesting-org/kronos-sdk/pkg/plugin"
 
 	// SDK types
 	"github.com/backtesting-org/kronos-sdk/pkg/types/connector"
+	"github.com/backtesting-org/kronos-sdk/pkg/types/data/stores/activity"
+	"github.com/backtesting-org/kronos-sdk/pkg/types/data/stores/market"
 	"github.com/backtesting-org/kronos-sdk/pkg/types/logging"
-	"github.com/backtesting-org/kronos-sdk/pkg/types/stores/activity"
-	"github.com/backtesting-org/kronos-sdk/pkg/types/stores/market"
+	plugintypes "github.com/backtesting-org/kronos-sdk/pkg/types/plugin"
 	"github.com/backtesting-org/kronos-sdk/pkg/types/temporal"
 
 	// Deployment-specific code
 	exchange "github.com/backtesting-org/live-trading/config/exchanges"
 	"github.com/backtesting-org/live-trading/external/exchanges/paradex"
 	"github.com/backtesting-org/live-trading/external/exchanges/paradex/adaptor"
+	"github.com/backtesting-org/live-trading/internal/adapters"
 	"github.com/backtesting-org/live-trading/internal/api"
 	"github.com/backtesting-org/live-trading/internal/api/handlers"
 	"github.com/backtesting-org/live-trading/internal/api/websocket"
@@ -55,7 +58,7 @@ func main() {
 			provideConnector,
 			provideMarketDataFeed,
 			provideTradeExecutor,
-			services.NewPluginManager,
+			providePluginManager,
 			services.NewStrategyExecutor,
 			handlers.NewPluginHandler,
 			handlers.NewStrategyHandler,
@@ -226,6 +229,19 @@ func provideTradeExecutor(
 	timeProvider temporal.TimeProvider,
 ) *services.TradeExecutor {
 	return services.NewTradeExecutor(conn, positionManager, repo, eventBus, logger, timeProvider)
+}
+
+func providePluginManager(
+	repo *database.Repository,
+	logger *zap.Logger,
+	cfg *config.Config,
+) plugintypes.Manager {
+	storage := adapters.NewPluginStorageAdapter(repo)
+
+	return plugin.NewManager(plugintypes.Config{
+		Storage:   storage,
+		PluginDir: cfg.Plugin.Directory,
+	})
 }
 
 func provideHTTPServer(

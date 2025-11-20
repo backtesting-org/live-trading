@@ -5,6 +5,7 @@ import (
 
 	kronosTypes "github.com/backtesting-org/kronos-sdk/pkg/types/kronos"
 	"github.com/backtesting-org/kronos-sdk/pkg/types/connector"
+	"github.com/backtesting-org/kronos-sdk/pkg/types/portfolio"
 	"github.com/backtesting-org/kronos-sdk/pkg/types/strategy"
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
@@ -196,6 +197,11 @@ func (gs *GridStrategy) createSellSignal(
 		},
 		Timestamp: time.Now(),
 	}
+}
+
+// GetRequiredAssets returns the assets required by this strategy
+func (gs *GridStrategy) GetRequiredAssets() []strategy.RequiredAsset {
+	return []strategy.RequiredAsset{{Symbol: portfolio.NewAsset("BTC")}}
 }
 
 // NewStrategy creates a new strategy instance for plugin loading

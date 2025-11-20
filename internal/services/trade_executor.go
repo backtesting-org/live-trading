@@ -7,8 +7,8 @@ import (
 
 	"github.com/backtesting-org/kronos-sdk/pkg/events"
 	"github.com/backtesting-org/kronos-sdk/pkg/types/connector"
+	"github.com/backtesting-org/kronos-sdk/pkg/types/data/stores/activity"
 	"github.com/backtesting-org/kronos-sdk/pkg/types/portfolio"
-	"github.com/backtesting-org/kronos-sdk/pkg/types/stores/activity"
 	"github.com/backtesting-org/kronos-sdk/pkg/types/strategy"
 	"github.com/backtesting-org/kronos-sdk/pkg/types/temporal"
 	"github.com/backtesting-org/live-trading/internal/database"

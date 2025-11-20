@@ -5,8 +5,9 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/backtesting-org/kronos-sdk/pkg/plugin"
+	plugintypes "github.com/backtesting-org/kronos-sdk/pkg/types/plugin"
 	"github.com/backtesting-org/live-trading/internal/config"
-	"github.com/backtesting-org/live-trading/internal/services"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"go.uber.org/zap"
@@ -14,13 +15,13 @@ import (
 
 // PluginHandler handles plugin management endpoints
 type PluginHandler struct {
-	pluginManager *services.PluginManager
+	pluginManager plugintypes.Manager
 	logger        *zap.Logger
 	maxUploadSize int64
 }
 
 // NewPluginHandler creates a new plugin handler
-func NewPluginHandler(pluginManager *services.PluginManager, logger *zap.Logger, cfg *config.Config) *PluginHandler {
+func NewPluginHandler(pluginManager plugintypes.Manager, logger *zap.Logger, cfg *config.Config) *PluginHandler {
 	return &PluginHandler{
 		pluginManager: pluginManager,
 		logger:        logger,
@@ -91,7 +92,7 @@ func (h *PluginHandler) UploadPlugin(c *gin.Context) {
 	}
 
 	// Validate plugin
-	if err := h.pluginManager.ValidatePluginFile(pluginPath); err != nil {
+	if err := plugin.ValidatePluginFile(pluginPath); err != nil {
 		h.logger.Error("Plugin validation failed", zap.Error(err))
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error:   "Invalid plugin file",

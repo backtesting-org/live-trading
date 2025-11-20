@@ -5,7 +5,7 @@ import (
 	"net/http"
 
 	"github.com/backtesting-org/kronos-sdk/pkg/types/connector"
-	"github.com/backtesting-org/kronos-sdk/pkg/types/stores/activity"
+	"github.com/backtesting-org/kronos-sdk/pkg/types/data/stores/activity"
 	"github.com/backtesting-org/live-trading/internal/database"
 	"github.com/backtesting-org/live-trading/internal/services"
 	"github.com/gin-gonic/gin"
