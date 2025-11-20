@@ -4,7 +4,6 @@ go 1.24.2
 
 require (
 	github.com/backtesting-org/kronos-sdk v0.0.1
-	github.com/gin-contrib/cors v1.7.6
 	github.com/gin-gonic/gin v1.11.0
 	github.com/go-openapi/runtime v0.29.0
 	github.com/go-openapi/strfmt v0.24.0
