@@ -42,6 +42,16 @@ func NewGridStrategy(k kronos.Kronos, config GridConfig) *GridStrategy {
 	}
 }
 
+// GetRequiredAssets returns the assets this strategy needs
+func (gs *GridStrategy) GetRequiredAssets() []strategy.RequiredAsset {
+	return []strategy.RequiredAsset{
+		{
+			Symbol:      gs.k.Asset("BTC"),
+			Instruments: []connector.Instrument{connector.TypePerpetual},
+		},
+	}
+}
+
 // GetSignals generates trading signals for grid strategy
 func (gs *GridStrategy) GetSignals() ([]*strategy.Signal, error) {
 	if !gs.IsEnabled() {

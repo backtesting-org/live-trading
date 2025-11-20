@@ -6,6 +6,7 @@ import (
 
 	"github.com/backtesting-org/kronos-sdk/pkg/types/connector"
 	"github.com/backtesting-org/kronos-sdk/pkg/types/kronos"
+	"github.com/backtesting-org/kronos-sdk/pkg/types/portfolio"
 	"github.com/backtesting-org/kronos-sdk/pkg/types/strategy"
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
@@ -40,6 +41,19 @@ func NewMomentumStrategy(k kronos.Kronos, config MomentumConfig) strategy.Strate
 		BaseStrategy: base,
 		k:            k,
 		config:       config,
+	}
+}
+
+func (ms *MomentumStrategy) GetRequiredAssets() []strategy.RequiredAsset {
+	return []strategy.RequiredAsset{
+		{
+			Symbol:      portfolio.NewAsset("BTC"),
+			Instruments: []connector.Instrument{connector.TypePerpetual, connector.TypeSpot},
+		},
+		{
+			Symbol:      portfolio.NewAsset("ETH"),
+			Instruments: []connector.Instrument{connector.TypePerpetual, connector.TypeSpot},
+		},
 	}
 }
 
