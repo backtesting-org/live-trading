@@ -6,10 +6,10 @@ import (
 
 	"github.com/backtesting-org/kronos-sdk/pkg/types/connector"
 	"github.com/backtesting-org/kronos-sdk/pkg/types/logging"
-	
+
 	exchange "github.com/backtesting-org/live-trading/config/exchanges"
-	"github.com/backtesting-org/live-trading/external/exchanges/paradex/requests"
-	websockets "github.com/backtesting-org/live-trading/external/exchanges/paradex/websocket"
+	"github.com/backtesting-org/live-trading/external/connectors/paradex/requests"
+	websockets "github.com/backtesting-org/live-trading/external/connectors/paradex/websocket"
 )
 
 // Paradex implements both Connector and WebSocketConnector interfaces

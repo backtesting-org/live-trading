@@ -3,7 +3,7 @@ module github.com/backtesting-org/live-trading
 go 1.24.2
 
 require (
-	github.com/backtesting-org/kronos-sdk v0.0.0-20251120055539-9c38c50fe648
+	github.com/backtesting-org/kronos-sdk v0.0.1
 	github.com/gin-contrib/cors v1.7.6
 	github.com/gin-gonic/gin v1.11.0
 	github.com/go-openapi/runtime v0.29.0

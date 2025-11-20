@@ -8,7 +8,7 @@ import (
 	"plugin"
 	"sync"
 
-	kronosTypes "github.com/backtesting-org/kronos-sdk/pkg/types/kronos"
+	"github.com/backtesting-org/kronos-sdk/pkg/types/kronos"
 	"github.com/backtesting-org/kronos-sdk/pkg/types/strategy"
 	"github.com/backtesting-org/live-trading/internal/config"
 	"github.com/backtesting-org/live-trading/internal/database"
@@ -36,7 +36,7 @@ type LoadedPlugin struct {
 
 // KronosAware is implemented by strategies that accept a Kronos context injection
 type KronosAware interface {
-    SetKronos(kronosTypes.Kronos)
+	SetKronos(*kronos.Kronos)
 }
 
 // NewPluginManager creates a new plugin manager

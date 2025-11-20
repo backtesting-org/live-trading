@@ -2,7 +2,7 @@ package requests
 
 import (
 	"github.com/backtesting-org/kronos-sdk/pkg/types/logging"
-	"github.com/backtesting-org/live-trading/external/exchanges/paradex/adaptor"
+	"github.com/backtesting-org/live-trading/external/connectors/paradex/adaptor"
 )
 
 type Service struct {
