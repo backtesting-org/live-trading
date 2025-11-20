@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/backtesting-org/kronos-sdk/pkg/types/connector"
-	"github.com/backtesting-org/live-trading/external/exchanges/paradex/requests"
+	"github.com/backtesting-org/live-trading/external/connectors/paradex/requests"
 	"github.com/shopspring/decimal"
 	"time"
 )
