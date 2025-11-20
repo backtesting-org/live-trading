@@ -43,13 +43,13 @@ type DatabaseConfig struct {
 // PluginConfig represents plugin system configuration
 type PluginConfig struct {
 	Directory       string `mapstructure:"directory"`
-	MaxPluginSize   int64  `mapstructure:"max_plugin_size"` // in bytes
+	MaxPluginSize   int64  `mapstructure:"max_plugin_size"`  // in bytes
 	AllowedVersions string `mapstructure:"allowed_versions"` // Go version compatibility
 }
 
 // LoggingConfig represents logging configuration
 type LoggingConfig struct {
-	Level      string `mapstructure:"level"` // debug, info, warn, error
+	Level      string `mapstructure:"level"`  // debug, info, warn, error
 	Format     string `mapstructure:"format"` // json, console
 	OutputPath string `mapstructure:"output_path"`
 }
@@ -70,14 +70,14 @@ func LoadConfig() (*Config, error) {
 	v.AutomaticEnv()
 
 	var config Config
-	if err := v.Unmarshal(&config); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
-	}
+	//if err := v.Unmarshal(&config); err != nil {
+	//	return nil, fmt.Errorf("failed to unmarshal config: %w", err)
+	//}
 
 	// Validate configuration
-	if err := validateConfig(&config); err != nil {
-		return nil, fmt.Errorf("invalid configuration: %w", err)
-	}
+	//if err := validateConfig(&config); err != nil {
+	//	return nil, fmt.Errorf("invalid configuration: %w", err)
+	//}
 
 	return &config, nil
 }

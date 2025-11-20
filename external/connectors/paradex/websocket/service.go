@@ -8,7 +8,7 @@ import (
 	"github.com/backtesting-org/kronos-sdk/pkg/types/logging"
 	"github.com/backtesting-org/kronos-sdk/pkg/types/temporal"
 	exchange "github.com/backtesting-org/live-trading/config/exchanges"
-	"github.com/backtesting-org/live-trading/external/exchanges/paradex/adaptor"
+	"github.com/backtesting-org/live-trading/external/connectors/paradex/adaptor"
 	"github.com/backtesting-org/live-trading/external/websocket/base"
 	connection2 "github.com/backtesting-org/live-trading/external/websocket/connection"
 	"github.com/backtesting-org/live-trading/external/websocket/performance"
