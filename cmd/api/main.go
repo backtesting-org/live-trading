@@ -7,6 +7,7 @@ import (
 	"github.com/backtesting-org/live-trading/internal/config"
 	"github.com/backtesting-org/live-trading/internal/database"
 	"github.com/backtesting-org/live-trading/internal/infrastructure"
+	"github.com/backtesting-org/live-trading/internal/services"
 	"go.uber.org/fx"
 )
 
@@ -24,8 +25,8 @@ func main() {
 		// === Database ===
 		database.Module,
 
-		// === Services ===
-		// services.Module,
+		// === Services (Strategy Runner, Auto-Load Plugins) ===
+		services.Module,
 
 		// === Exchange Configs ===
 		exchange.Module,

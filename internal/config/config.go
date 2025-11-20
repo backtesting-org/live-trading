@@ -70,14 +70,14 @@ func LoadConfig() (*Config, error) {
 	v.AutomaticEnv()
 
 	var config Config
-	//if err := v.Unmarshal(&config); err != nil {
-	//	return nil, fmt.Errorf("failed to unmarshal config: %w", err)
-	//}
+	if err := v.Unmarshal(&config); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
+	}
 
 	// Validate configuration
-	//if err := validateConfig(&config); err != nil {
-	//	return nil, fmt.Errorf("invalid configuration: %w", err)
-	//}
+	if err := validateConfig(&config); err != nil {
+		return nil, fmt.Errorf("invalid configuration: %w", err)
+	}
 
 	return &config, nil
 }
