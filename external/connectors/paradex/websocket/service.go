@@ -7,7 +7,6 @@ import (
 
 	"github.com/backtesting-org/kronos-sdk/pkg/types/logging"
 	"github.com/backtesting-org/kronos-sdk/pkg/types/temporal"
-	exchange "github.com/backtesting-org/live-trading/config/exchanges"
 	"github.com/backtesting-org/live-trading/external/connectors/paradex/adaptor"
 	"github.com/backtesting-org/live-trading/external/websocket/base"
 	connection2 "github.com/backtesting-org/live-trading/external/websocket/connection"
@@ -45,12 +44,12 @@ type service struct {
 
 func NewService(
 	client *adaptor.Client,
-	config *exchange.Paradex,
+	webSocketURL string,
 	logger logging.ApplicationLogger,
 	tradingLogger logging.TradingLogger,
 	timeProvider temporal.TimeProvider,
 ) WebSocketService {
-	connConfig := connection2.TradingConfig(config.WebSocketURL)
+	connConfig := connection2.TradingConfig(webSocketURL)
 	authManager := security.NewAuthManager(&ParadexAuthProvider{client: client}, logger)
 	metrics := performance.NewMetrics()
 	connectionManager := connection2.NewConnectionManager(connConfig, authManager, metrics, logger)

@@ -2,24 +2,28 @@ package paradex
 
 import (
 	"context"
+	"fmt"
 	"sync"
 
 	"github.com/backtesting-org/kronos-sdk/pkg/types/connector"
 	"github.com/backtesting-org/kronos-sdk/pkg/types/logging"
+	"github.com/backtesting-org/kronos-sdk/pkg/types/temporal"
 
-	exchange "github.com/backtesting-org/live-trading/config/exchanges"
+	"github.com/backtesting-org/live-trading/external/connectors/paradex/adaptor"
 	"github.com/backtesting-org/live-trading/external/connectors/paradex/requests"
 	websockets "github.com/backtesting-org/live-trading/external/connectors/paradex/websocket"
+	liveconnector "github.com/backtesting-org/live-trading/pkg/connector"
 )
 
-// paradex implements both Connector and WebSocketConnector interfaces
+// paradex implements Connector, WebSocketConnector, and Initializable interfaces
 type paradex struct {
-	// Existing fields
 	paradexService *requests.Service
-	config         *exchange.Paradex
+	config         *Config
 	appLogger      logging.ApplicationLogger
 	tradingLogger  logging.TradingLogger
+	timeProvider   temporal.TimeProvider
 	ctx            context.Context
+	initialized    bool
 
 	// WebSocket service
 	wsService websockets.WebSocketService
@@ -37,23 +41,63 @@ func (p *paradex) Reset() error {
 	return nil
 }
 
-// Ensure paradex implements both interfaces at compile time
+// Ensure paradex implements all interfaces at compile time
 var _ connector.Connector = (*paradex)(nil)
 var _ connector.WebSocketConnector = (*paradex)(nil)
+var _ liveconnector.Initializable = (*paradex)(nil)
 
 func NewParadex(
-	paradexService *requests.Service,
-	wsService websockets.WebSocketService,
-	config *exchange.Paradex,
 	appLogger logging.ApplicationLogger,
 	tradingLogger logging.TradingLogger,
-) connector.Connector {
+	timeProvider temporal.TimeProvider,
+) liveconnector.Initializable {
 	return &paradex{
-		paradexService: paradexService,
-		wsService:      wsService,
-		config:         config,
+		paradexService: nil, // Will be created during initialization
+		wsService:      nil, // Will be created during initialization
+		config:         nil, // Will be set during initialization
 		appLogger:      appLogger,
 		tradingLogger:  tradingLogger,
+		timeProvider:   timeProvider,
 		ctx:            context.Background(),
+		initialized:    false,
 	}
+}
+
+// Initialize implements Initializable interface
+func (p *paradex) Initialize(config liveconnector.Config) error {
+	if p.initialized {
+		return fmt.Errorf("connector already initialized")
+	}
+
+	paradexConfig, ok := config.(*Config)
+	if !ok {
+		return fmt.Errorf("invalid config type for Paradex connector: expected *paradex.Config, got %T", config)
+	}
+
+	// Create adaptor client
+	adaptorConfig := &adaptor.Config{
+		BaseURL:       paradexConfig.BaseURL,
+		StarknetRPC:   paradexConfig.StarknetRPC,
+		EthPrivateKey: paradexConfig.EthPrivateKey,
+		Network:       paradexConfig.Network,
+	}
+
+	client, err := adaptor.NewClient(adaptorConfig, p.appLogger)
+	if err != nil {
+		return fmt.Errorf("failed to create Paradex client: %w", err)
+	}
+
+	// Create services
+	p.paradexService = requests.NewService(client, p.appLogger)
+	p.wsService = websockets.NewService(client, paradexConfig.WebSocketURL, p.appLogger, p.tradingLogger, p.timeProvider)
+
+	p.config = paradexConfig
+	p.initialized = true
+	p.appLogger.Info("Paradex connector initialized", "base_url", paradexConfig.BaseURL)
+	return nil
+}
+
+// IsInitialized implements Initializable interface
+func (p *paradex) IsInitialized() bool {
+	return p.initialized
 }
