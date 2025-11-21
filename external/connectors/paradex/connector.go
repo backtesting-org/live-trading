@@ -47,7 +47,7 @@ func NewParadex(
 	config *exchange.Paradex,
 	appLogger logging.ApplicationLogger,
 	tradingLogger logging.TradingLogger,
-) *Paradex {
+) connector.Connector {
 	return &Paradex{
 		paradexService: paradexService,
 		wsService:      wsService,

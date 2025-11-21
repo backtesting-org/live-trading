@@ -21,7 +21,7 @@ var Module = fx.Options(
 )
 
 // registerParadex registers the Paradex connector with the SDK's ConnectorRegistry
-func registerParadex(paradexConn *Paradex, reg registry.ConnectorRegistry) {
+func registerParadex(paradexConn connector.Connector, reg registry.ConnectorRegistry) {
 	// Register the connector so it's available globally in the SDK
 	reg.RegisterConnector(connector.Paradex, paradexConn)
 }
