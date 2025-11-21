@@ -1,10 +1,36 @@
 package websockets
 
 import (
+	"context"
 	"time"
 
 	"github.com/shopspring/decimal"
 )
+
+// WebSocketService defines the interface for WebSocket-based exchange connectivity
+type WebSocketService interface {
+	// Connection management
+	Connect(ctx context.Context) error
+	Disconnect() error
+	IsConnected() bool
+	StartWebSocket(ctx context.Context) error
+	StopWebSocket() error
+	IsWebSocketConnected() bool
+
+	// Subscription methods
+	SubscribeOrderBook(asset string) error
+	SubscribeTrades(asset string) error
+	SubscribeAccount() error
+
+	// Data channels
+	OrderbookUpdates() <-chan OrderbookUpdate
+	TradeUpdates() <-chan TradeUpdate
+	AccountUpdates() <-chan AccountUpdate
+	ErrorChannel() <-chan error
+
+	// Metrics
+	GetMetrics() map[string]interface{}
+}
 
 type ParadexSubscriptionMessage struct {
 	JSONRPC string                    `json:"jsonrpc"`

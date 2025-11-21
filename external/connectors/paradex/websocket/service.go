@@ -15,7 +15,10 @@ import (
 	"github.com/backtesting-org/live-trading/external/websocket/security"
 )
 
-type Service struct {
+// Ensure service implements WebSocketService interface at compile time
+var _ WebSocketService = (*service)(nil)
+
+type service struct {
 	connectionManager *connection2.ConnectionManager
 	reconnectManager  *connection2.ReconnectManager
 	handlerRegistry   *base.HandlerRegistry
@@ -46,7 +49,7 @@ func NewService(
 	logger logging.ApplicationLogger,
 	tradingLogger logging.TradingLogger,
 	timeProvider temporal.TimeProvider,
-) *Service {
+) WebSocketService {
 	connConfig := connection2.TradingConfig(config.WebSocketURL)
 	authManager := security.NewAuthManager(&ParadexAuthProvider{client: client}, logger)
 	metrics := performance.NewMetrics()
@@ -55,7 +58,7 @@ func NewService(
 	reconnectManager := connection2.NewReconnectManager(connectionManager, reconnectStrategy, logger)
 	handlerRegistry := base.NewHandlerRegistry(logger)
 
-	service := &Service{
+	service := &service{
 		connectionManager: connectionManager,
 		reconnectManager:  reconnectManager,
 		handlerRegistry:   handlerRegistry,
@@ -84,68 +87,62 @@ func NewService(
 	return service
 }
 
-func (s *Service) Connect(ctx context.Context) error {
+func (s *service) Connect(ctx context.Context) error {
 	return s.connectionManager.Connect(ctx)
 }
 
-func (s *Service) Disconnect() error {
+func (s *service) Disconnect() error {
 	return s.connectionManager.Disconnect()
 }
 
-func (s *Service) IsConnected() bool {
+func (s *service) IsConnected() bool {
 	return s.connectionManager.GetState() == connection2.StateConnected
 }
 
-func (s *Service) GetMetrics() map[string]interface{} {
+func (s *service) GetMetrics() map[string]interface{} {
 	return s.connectionManager.GetConnectionStats()
 }
 
-func (s *Service) ErrorChannel() <-chan error {
+func (s *service) ErrorChannel() <-chan error {
 	return s.errorChan
 }
 
-func (s *Service) StartWebSocket(ctx context.Context) error {
+func (s *service) StartWebSocket(ctx context.Context) error {
 	return s.Connect(ctx)
 }
 
-func (s *Service) StopWebSocket() error {
+func (s *service) StopWebSocket() error {
 	return s.Disconnect()
 }
 
-func (s *Service) IsWebSocketConnected() bool {
+func (s *service) IsWebSocketConnected() bool {
 	return s.IsConnected()
 }
 
-func (s *Service) SubscribeOrderBook(asset string) error {
+func (s *service) SubscribeOrderBook(asset string) error {
 	return s.SubscribeOrderbook(asset)
 }
 
-func (s *Service) SubscribeTrades(asset string) error {
+func (s *service) SubscribeTrades(asset string) error {
 	return s.SubscribeTradesForSymbol(asset)
 }
 
-func (s *Service) SubscribeAccount() error {
+func (s *service) SubscribeAccount() error {
 	return s.SubscribeAccountUpdates()
 }
 
 // Thread-safe write method
-func (s *Service) safeWriteJSON(message interface{}) error {
+func (s *service) safeWriteJSON(message interface{}) error {
 	s.writeMutex.Lock()
 	defer s.writeMutex.Unlock()
 	return s.connectionManager.SendJSON(message)
 }
 
 // Feed trades to kline builder
-func (s *Service) feedTradesToKlineBuilder() {
-	for {
-		select {
-		case trade, ok := <-s.tradeChan:
-			if !ok {
-				return
-			}
-			if s.klineBuilder != nil {
-				s.klineBuilder.ProcessTrade(trade)
-			}
+func (s *service) feedTradesToKlineBuilder() {
+	for trade := range s.tradeChan {
+		if s.klineBuilder != nil {
+			s.klineBuilder.ProcessTrade(trade)
 		}
 	}
 }

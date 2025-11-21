@@ -10,7 +10,7 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-func (p *Paradex) PlaceLimitOrder(symbol string, side connector.OrderSide, quantity, price decimal.Decimal) (*connector.OrderResponse, error) {
+func (p *paradex) PlaceLimitOrder(symbol string, side connector.OrderSide, quantity, price decimal.Decimal) (*connector.OrderResponse, error) {
 	orderReq := requests.PlaceOrderParams{
 		Market:    symbol + "-USD-PERP",
 		Side:      string(side), // "BUY" or "SELL"
@@ -38,7 +38,7 @@ func (p *Paradex) PlaceLimitOrder(symbol string, side connector.OrderSide, quant
 	}, nil
 }
 
-func (p *Paradex) PlaceMarketOrder(symbol string, side connector.OrderSide, quantity decimal.Decimal) (*connector.OrderResponse, error) {
+func (p *paradex) PlaceMarketOrder(symbol string, side connector.OrderSide, quantity decimal.Decimal) (*connector.OrderResponse, error) {
 	orderReq := requests.PlaceOrderParams{
 		Market:    symbol,
 		Side:      string(side),
@@ -65,7 +65,7 @@ func (p *Paradex) PlaceMarketOrder(symbol string, side connector.OrderSide, quan
 	}, nil
 }
 
-func (p *Paradex) CancelOrder(symbol, orderID string) (*connector.CancelResponse, error) {
+func (p *paradex) CancelOrder(symbol, orderID string) (*connector.CancelResponse, error) {
 	p.tradingLogger.OrderLifecycle("Cancelling order %s for symbol %s", orderID, symbol)
 	err := p.paradexService.CancelOrder(p.ctx, orderID)
 	if err != nil {
@@ -80,14 +80,14 @@ func (p *Paradex) CancelOrder(symbol, orderID string) (*connector.CancelResponse
 	}, nil
 }
 
-func (p *Paradex) GetOpenOrders() ([]connector.Order, error) {
+func (p *paradex) GetOpenOrders() ([]connector.Order, error) {
 	ctx := context.Background()
 	paradexOrders, err := p.paradexService.GetOpenOrders(ctx, nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get open orders from Paradex: %w", err)
+		return nil, fmt.Errorf("failed to get open orders from paradex: %w", err)
 	}
 
-	// Convert Paradex orders to connector format
+	// Convert paradex orders to connector format
 	orders := make([]connector.Order, 0, len(paradexOrders))
 
 	for _, paradexOrder := range paradexOrders {
@@ -99,11 +99,11 @@ func (p *Paradex) GetOpenOrders() ([]connector.Order, error) {
 		orders = append(orders, convertedOrder)
 	}
 
-	p.appLogger.Debug("Retrieved %d open orders from Paradex", len(orders))
+	p.appLogger.Debug("Retrieved %d open orders from paradex", len(orders))
 	return orders, nil
 }
 
-func (p *Paradex) GetOrderStatus(orderID string) (*connector.Order, error) {
+func (p *paradex) GetOrderStatus(orderID string) (*connector.Order, error) {
 	order, err := p.paradexService.GetOrder(p.ctx, orderID)
 	if err != nil {
 		return nil, err
@@ -113,42 +113,42 @@ func (p *Paradex) GetOrderStatus(orderID string) (*connector.Order, error) {
 		return nil, fmt.Errorf("order %s not found", orderID)
 	}
 
-	// Convert Paradex order to connector format
+	// Convert paradex order to connector format
 	convertedOrder := p.convertParadexOrder(order)
 
 	return &convertedOrder, nil
 }
 
-// GetRawOrder returns the raw Paradex order details
-func (p *Paradex) GetRawOrder(ctx context.Context, orderID string) (interface{}, error) {
+// GetRawOrder returns the raw paradex order details
+func (p *paradex) GetRawOrder(ctx context.Context, orderID string) (interface{}, error) {
 	return p.paradexService.GetOrder(ctx, orderID)
 }
 
 // GetRawOpenOrders returns open orders with optional market filter
-func (p *Paradex) GetRawOpenOrders(ctx context.Context, market *string) (interface{}, error) {
+func (p *paradex) GetRawOpenOrders(ctx context.Context, market *string) (interface{}, error) {
 	return p.paradexService.GetOpenOrders(ctx, market)
 }
 
 // GetAccountSummary returns the account summary
-func (p *Paradex) GetAccountSummary(ctx context.Context) (interface{}, error) {
+func (p *paradex) GetAccountSummary(ctx context.Context) (interface{}, error) {
 	return p.paradexService.GetAccount(ctx)
 }
 
 // GetBalances returns account balances
-func (p *Paradex) GetBalances(ctx context.Context) (interface{}, error) {
+func (p *paradex) GetBalances(ctx context.Context) (interface{}, error) {
 	return p.paradexService.GetAssetBalances(ctx)
 }
 
 // GetUserPositions returns current positions
-func (p *Paradex) GetUserPositions(ctx context.Context) (interface{}, error) {
+func (p *paradex) GetUserPositions(ctx context.Context) (interface{}, error) {
 	return p.paradexService.GetUserPositions(ctx)
 }
 
 // GetTradeHistory returns trade history with optional market filter
-func (p *Paradex) GetTradeHistory(ctx context.Context, market *string) (interface{}, error) {
+func (p *paradex) GetTradeHistory(ctx context.Context, market *string) (interface{}, error) {
 	return p.paradexService.GetTradeHistory(ctx, market, nil)
 }
 
-func (p *Paradex) GetTradingHistory(symbol string, limit int) ([]connector.Trade, error) {
+func (p *paradex) GetTradingHistory(symbol string, limit int) ([]connector.Trade, error) {
 	return nil, fmt.Errorf("trading history not needed for MM strategy")
 }

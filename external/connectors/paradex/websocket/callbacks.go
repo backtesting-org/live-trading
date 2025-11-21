@@ -10,7 +10,7 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-func (s *Service) setupCallbacks() {
+func (s *service) setupCallbacks() {
 	s.connectionManager.SetCallbacks(
 		s.onConnect,
 		s.onDisconnect,
@@ -25,16 +25,16 @@ func (s *Service) setupCallbacks() {
 	)
 }
 
-func (s *Service) onConnect() error {
+func (s *service) onConnect() error {
 	s.tradingLogger.Info("Paradex WebSocket connected")
 	return nil
 }
 
-func (s *Service) onDisconnect() {
+func (s *service) onDisconnect() {
 	s.tradingLogger.Info("Paradex WebSocket disconnected")
 }
 
-func (s *Service) onMessage(message []byte) error {
+func (s *service) onMessage(message []byte) error {
 	// Handle Paradex subscription messages directly
 	if s.isParadexSubscriptionMessage(message) {
 		return s.routeParadexSubscription(message)
@@ -51,33 +51,33 @@ func (s *Service) onMessage(message []byte) error {
 	return s.handlerRegistry.RouteMessage(context.Background(), message)
 }
 
-func (s *Service) onError(err error) {
+func (s *service) onError(err error) {
 	select {
 	case s.errorChan <- err:
 	default:
 	}
 }
 
-func (s *Service) onReconnectStart(attempt int) {
+func (s *service) onReconnectStart(attempt int) {
 	s.tradingLogger.Info("Starting Paradex reconnection attempt %d", attempt)
 }
 
-func (s *Service) onReconnectFail(attempt int, err error) {
+func (s *service) onReconnectFail(attempt int, err error) {
 	s.tradingLogger.Info("Paradex reconnection attempt %d failed: %v", attempt, err)
 }
 
-func (s *Service) onReconnectSuccess(attempt int) {
+func (s *service) onReconnectSuccess(attempt int) {
 	s.tradingLogger.Info("Paradex reconnected successfully after %d attempts", attempt)
 	s.resubscribeAll()
 }
 
-func (s *Service) registerHandlers() {
+func (s *service) registerHandlers() {
 	// Paradex messages are handled directly in onMessage routing
 	// No need for separate handlers since we process JSON-RPC format directly
 	s.applicationLogger.Debug("Paradex-specific message routing configured")
 }
 
-func (s *Service) isParadexSubscriptionMessage(message []byte) bool {
+func (s *service) isParadexSubscriptionMessage(message []byte) bool {
 	var msg struct {
 		JSONRPC string `json:"jsonrpc"`
 		Method  string `json:"method"`
@@ -90,7 +90,7 @@ func (s *Service) isParadexSubscriptionMessage(message []byte) bool {
 	return msg.JSONRPC == "2.0" && msg.Method == "subscription"
 }
 
-func (s *Service) routeParadexSubscription(message []byte) error {
+func (s *service) routeParadexSubscription(message []byte) error {
 	var msg struct {
 		JSONRPC string `json:"jsonrpc"`
 		Method  string `json:"method"`
@@ -118,7 +118,7 @@ func (s *Service) routeParadexSubscription(message []byte) error {
 	}
 }
 
-func (s *Service) isSubscriptionConfirmation(message []byte) bool {
+func (s *service) isSubscriptionConfirmation(message []byte) bool {
 	var msg struct {
 		JSONRPC string      `json:"jsonrpc"`
 		ID      int64       `json:"id"`
@@ -132,12 +132,12 @@ func (s *Service) isSubscriptionConfirmation(message []byte) bool {
 	return msg.JSONRPC == "2.0" && msg.ID > 0 && msg.Result != nil
 }
 
-func (s *Service) handleSubscriptionConfirmation(message []byte) error {
+func (s *service) handleSubscriptionConfirmation(message []byte) error {
 	s.applicationLogger.Debug("📋 Subscription confirmed: %s", string(message))
 	return nil
 }
 
-func (s *Service) processOrderbookData(channel string, data json.RawMessage) error {
+func (s *service) processOrderbookData(channel string, data json.RawMessage) error {
 	// Extract symbol from channel name
 	symbol := s.extractSymbolFromChannel(channel)
 
@@ -188,7 +188,7 @@ func (s *Service) processOrderbookData(channel string, data json.RawMessage) err
 	return nil
 }
 
-func (s *Service) processTradeData(channel string, data json.RawMessage) error {
+func (s *service) processTradeData(channel string, data json.RawMessage) error {
 	symbol := s.extractSymbolFromChannel(channel)
 
 	var paradexTrade struct {
@@ -243,7 +243,7 @@ func (s *Service) processTradeData(channel string, data json.RawMessage) error {
 	return nil
 }
 
-func (s *Service) processAccountData(data json.RawMessage) error {
+func (s *service) processAccountData(data json.RawMessage) error {
 	// Parse Paradex account format
 	var paradexData struct {
 		UpdateType string `json:"update_type"`
@@ -320,7 +320,7 @@ func (s *Service) processAccountData(data json.RawMessage) error {
 	return nil
 }
 
-func (s *Service) extractSymbolFromChannel(channel string) string {
+func (s *service) extractSymbolFromChannel(channel string) string {
 	// Extract symbol from "order_book.BTC-USD-PERP.snapshot@15@100ms@1"
 	parts := strings.Split(channel, ".")
 	if len(parts) >= 2 {
@@ -329,7 +329,7 @@ func (s *Service) extractSymbolFromChannel(channel string) string {
 	return "UNKNOWN"
 }
 
-func (s *Service) convertParadexLevels(levels []struct {
+func (s *service) convertParadexLevels(levels []struct {
 	Side  string `json:"side"`
 	Price string `json:"price"`
 	Size  string `json:"size"`

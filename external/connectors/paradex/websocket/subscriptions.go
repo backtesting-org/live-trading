@@ -59,7 +59,7 @@ func (sm *subscriptionManager) buildKey(channel, symbol string) string {
 	return channel
 }
 
-func (s *Service) getOptimalPriceTick(symbol string) string {
+func (s *service) getOptimalPriceTick(symbol string) string {
 	switch {
 	case strings.Contains(symbol, "BTC"):
 		return "1" // $1.00 for BTC
@@ -72,7 +72,7 @@ func (s *Service) getOptimalPriceTick(symbol string) string {
 	}
 }
 
-func (s *Service) ensureParadexFormat(symbol string) string {
+func (s *service) ensureParadexFormat(symbol string) string {
 	switch symbol {
 	case "BTC", "BTC-USD-PERP":
 		return "BTC-USD-PERP"
@@ -89,14 +89,14 @@ func (s *Service) ensureParadexFormat(symbol string) string {
 	}
 }
 
-func (s *Service) buildOrderbookChannel(symbol string, depth int, refreshRate string, priceTick string) string {
+func (s *service) buildOrderbookChannel(symbol string, depth int, refreshRate string, priceTick string) string {
 	marketSymbol := s.ensureParadexFormat(symbol)
 
 	return fmt.Sprintf("order_book.%s.snapshot@%d@%s@%s",
 		marketSymbol, depth, refreshRate, priceTick)
 }
 
-func (s *Service) SubscribeOrderbook(symbol string) error {
+func (s *service) SubscribeOrderbook(symbol string) error {
 	priceTick := s.getOptimalPriceTick(symbol)
 
 	channel := s.buildOrderbookChannel(
@@ -125,7 +125,7 @@ func (s *Service) SubscribeOrderbook(symbol string) error {
 	return nil
 }
 
-func (s *Service) UnsubscribeOrderbook(symbol string) error {
+func (s *service) UnsubscribeOrderbook(symbol string) error {
 	if !s.subManager.exists("orderbook", symbol) {
 		return nil
 	}
@@ -150,7 +150,7 @@ func (s *Service) UnsubscribeOrderbook(symbol string) error {
 	return nil
 }
 
-func (s *Service) SubscribeTradesForSymbol(symbol string) error {
+func (s *service) SubscribeTradesForSymbol(symbol string) error {
 	marketSymbol := s.ensureParadexFormat(symbol)
 	channel := fmt.Sprintf("trades.%s", marketSymbol)
 
@@ -171,7 +171,7 @@ func (s *Service) SubscribeTradesForSymbol(symbol string) error {
 	return nil
 }
 
-func (s *Service) UnsubscribeTrades(symbol string) error {
+func (s *service) UnsubscribeTrades(symbol string) error {
 	if !s.subManager.exists("trades", symbol) {
 		return nil
 	}
@@ -196,7 +196,7 @@ func (s *Service) UnsubscribeTrades(symbol string) error {
 	return nil
 }
 
-func (s *Service) SubscribeAccountUpdates() error {
+func (s *service) SubscribeAccountUpdates() error {
 	subMsg := map[string]interface{}{
 		"jsonrpc": "2.0",
 		"id":      s.getNextRequestID(),
@@ -214,7 +214,7 @@ func (s *Service) SubscribeAccountUpdates() error {
 	return nil
 }
 
-func (s *Service) UnsubscribeAccount() error {
+func (s *service) UnsubscribeAccount() error {
 	if !s.subManager.exists("account", "") {
 		return nil
 	}
@@ -236,15 +236,15 @@ func (s *Service) UnsubscribeAccount() error {
 	return nil
 }
 
-func (s *Service) GetActiveSubscriptions() []string {
+func (s *service) GetActiveSubscriptions() []string {
 	return s.subManager.getAll()
 }
 
-func (s *Service) IsSubscribed(channel, symbol string) bool {
+func (s *service) IsSubscribed(channel, symbol string) bool {
 	return s.subManager.exists(channel, symbol)
 }
 
-func (s *Service) UnsubscribeAll() error {
+func (s *service) UnsubscribeAll() error {
 	subscriptions := s.GetActiveSubscriptions()
 
 	for _, subscription := range subscriptions {
@@ -276,7 +276,7 @@ func (s *Service) UnsubscribeAll() error {
 	return nil
 }
 
-func (s *Service) resubscribeAll() {
+func (s *service) resubscribeAll() {
 	subscriptions := s.GetActiveSubscriptions()
 
 	for _, subscription := range subscriptions {
@@ -306,7 +306,7 @@ func (s *Service) resubscribeAll() {
 	}
 }
 
-func (s *Service) getNextRequestID() int64 {
+func (s *service) getNextRequestID() int64 {
 	s.requestMutex.Lock()
 	defer s.requestMutex.Unlock()
 	s.requestID++

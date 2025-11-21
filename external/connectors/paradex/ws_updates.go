@@ -5,7 +5,7 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-func (p *Paradex) OrderBookUpdates() <-chan connector.OrderBook {
+func (p *paradex) OrderBookUpdates() <-chan connector.OrderBook {
 	if p.wsService == nil {
 		ch := make(chan connector.OrderBook)
 		close(ch)
@@ -17,7 +17,7 @@ func (p *Paradex) OrderBookUpdates() <-chan connector.OrderBook {
 	return convertedChan
 }
 
-func (p *Paradex) TradeUpdates() <-chan connector.Trade {
+func (p *paradex) TradeUpdates() <-chan connector.Trade {
 	if p.wsService == nil {
 		ch := make(chan connector.Trade)
 		close(ch)
@@ -29,7 +29,7 @@ func (p *Paradex) TradeUpdates() <-chan connector.Trade {
 	return convertedChan
 }
 
-func (p *Paradex) PositionUpdates() <-chan connector.Position {
+func (p *paradex) PositionUpdates() <-chan connector.Position {
 	if p.wsService == nil {
 		ch := make(chan connector.Position)
 		close(ch)
@@ -42,7 +42,7 @@ func (p *Paradex) PositionUpdates() <-chan connector.Position {
 	return convertedChan
 }
 
-func (p *Paradex) AccountBalanceUpdates() <-chan connector.AccountBalance {
+func (p *paradex) AccountBalanceUpdates() <-chan connector.AccountBalance {
 	if p.wsService == nil {
 		ch := make(chan connector.AccountBalance)
 		close(ch)
@@ -55,7 +55,7 @@ func (p *Paradex) AccountBalanceUpdates() <-chan connector.AccountBalance {
 	return convertedChan
 }
 
-func (p *Paradex) KlineUpdates() <-chan connector.Kline {
+func (p *paradex) KlineUpdates() <-chan connector.Kline {
 	if p.wsService == nil {
 		ch := make(chan connector.Kline)
 		close(ch)
@@ -68,7 +68,7 @@ func (p *Paradex) KlineUpdates() <-chan connector.Kline {
 	return convertedChan
 }
 
-func (p *Paradex) ErrorChannel() <-chan error {
+func (p *paradex) ErrorChannel() <-chan error {
 	if p.wsService == nil {
 		ch := make(chan error)
 		close(ch)
@@ -79,21 +79,21 @@ func (p *Paradex) ErrorChannel() <-chan error {
 }
 
 // Stub converter methods - implement these when you need the functionality
-func (p *Paradex) convertPositionUpdates(out chan<- connector.Position) {
+func (p *paradex) convertPositionUpdates(out chan<- connector.Position) {
 	defer close(out)
-	// TODO: Convert from Paradex position format to connector.Position
+	// TODO: Convert from paradex position format to connector.Position
 	// For now, just a placeholder that doesn't send anything
 	<-p.wsContext.Done()
 }
 
-func (p *Paradex) convertAccountBalanceUpdates(out chan<- connector.AccountBalance) {
+func (p *paradex) convertAccountBalanceUpdates(out chan<- connector.AccountBalance) {
 	defer close(out)
-	// TODO: Convert from Paradex balance format to connector.AccountBalance
+	// TODO: Convert from paradex balance format to connector.AccountBalance
 	// For now, just a placeholder that doesn't send anything
 	<-p.wsContext.Done()
 }
 
-func (p *Paradex) convertKlineUpdates(out chan<- connector.Kline) {
+func (p *paradex) convertKlineUpdates(out chan<- connector.Kline) {
 	defer close(out)
 
 	for {
@@ -105,7 +105,7 @@ func (p *Paradex) convertKlineUpdates(out chan<- connector.Kline) {
 				return
 			}
 
-			// Convert from Paradex KlineUpdate to connector.Kline
+			// Convert from paradex KlineUpdate to connector.Kline
 			connectorKline := connector.Kline{
 				Symbol:      paradexKline.Symbol,
 				Interval:    paradexKline.Interval,
@@ -116,9 +116,9 @@ func (p *Paradex) convertKlineUpdates(out chan<- connector.Kline) {
 				Close:       paradexKline.Close,
 				Volume:      paradexKline.Volume,
 				CloseTime:   paradexKline.CloseTime,
-				QuoteVolume: decimal.Zero,                 // Not available from Paradex
+				QuoteVolume: decimal.Zero,                 // Not available from paradex
 				TradeCount:  int(paradexKline.TradeCount), // Convert int64 to int
-				TakerVolume: decimal.Zero,                 // Not available from Paradex
+				TakerVolume: decimal.Zero,                 // Not available from paradex
 			}
 
 			select {

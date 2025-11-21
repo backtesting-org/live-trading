@@ -4,11 +4,11 @@ import (
 	"github.com/backtesting-org/kronos-sdk/pkg/types/portfolio"
 )
 
-func (p *Paradex) FetchAvailableSpotAssets() ([]portfolio.Asset, error) {
+func (p *paradex) FetchAvailableSpotAssets() ([]portfolio.Asset, error) {
 	return []portfolio.Asset{}, nil
 }
 
-func (p *Paradex) FetchAvailablePerpetualAssets() ([]portfolio.Asset, error) {
+func (p *paradex) FetchAvailablePerpetualAssets() ([]portfolio.Asset, error) {
 	markets, err := p.paradexService.GetMarkets(p.ctx)
 	if err != nil {
 		return nil, err

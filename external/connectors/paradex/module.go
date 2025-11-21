@@ -16,11 +16,11 @@ var Module = fx.Options(
 		websockets.NewService,
 		NewParadex,
 	),
-	// Automatically register Paradex with the SDK registry at startup
+	// Automatically register paradex with the SDK registry at startup
 	fx.Invoke(registerParadex),
 )
 
-// registerParadex registers the Paradex connector with the SDK's ConnectorRegistry
+// registerParadex registers the paradex connector with the SDK's ConnectorRegistry
 func registerParadex(paradexConn connector.Connector, reg registry.ConnectorRegistry) {
 	// Register the connector so it's available globally in the SDK
 	reg.RegisterConnector(connector.Paradex, paradexConn)

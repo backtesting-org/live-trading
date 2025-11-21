@@ -10,7 +10,7 @@ import (
 	"strings"
 )
 
-func (p *Paradex) convertOrderBookUpdates(output chan<- connector.OrderBook) {
+func (p *paradex) convertOrderBookUpdates(output chan<- connector.OrderBook) {
 	defer close(output)
 
 	for wsUpdate := range p.wsService.OrderbookUpdates() {
@@ -31,7 +31,7 @@ func (p *Paradex) convertOrderBookUpdates(output chan<- connector.OrderBook) {
 	}
 }
 
-func (p *Paradex) convertWSPriceLevels(wsLevels []websockets.PriceLevel) []connector.PriceLevel {
+func (p *paradex) convertWSPriceLevels(wsLevels []websockets.PriceLevel) []connector.PriceLevel {
 	result := make([]connector.PriceLevel, len(wsLevels))
 	for i, wsLevel := range wsLevels {
 		result[i] = connector.PriceLevel{
@@ -42,7 +42,7 @@ func (p *Paradex) convertWSPriceLevels(wsLevels []websockets.PriceLevel) []conne
 	return result
 }
 
-func (p *Paradex) convertTradeUpdates(output chan<- connector.Trade) {
+func (p *paradex) convertTradeUpdates(output chan<- connector.Trade) {
 	defer close(output)
 
 	for wsUpdate := range p.wsService.TradeUpdates() {
@@ -54,7 +54,7 @@ func (p *Paradex) convertTradeUpdates(output chan<- connector.Trade) {
 			Price:     wsUpdate.Price,
 			Quantity:  wsUpdate.Quantity,
 			Side:      p.convertOrderSide(side),
-			IsMaker:   false,        // Paradex doesn't provide this in trade updates
+			IsMaker:   false,        // paradex doesn't provide this in trade updates
 			Fee:       decimal.Zero, // Not available in WebSocket updates
 			Timestamp: wsUpdate.Timestamp,
 		}
@@ -67,7 +67,7 @@ func (p *Paradex) convertTradeUpdates(output chan<- connector.Trade) {
 	}
 }
 
-func (p *Paradex) parseAssetFromSymbol(symbol string) portfolio.Asset {
+func (p *paradex) parseAssetFromSymbol(symbol string) portfolio.Asset {
 	// Parse symbols like "BTC-USD-PERP" to extract "BTC"
 	parts := strings.Split(symbol, "-")
 	if len(parts) > 0 {
