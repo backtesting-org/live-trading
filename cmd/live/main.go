@@ -8,14 +8,26 @@ import (
 )
 
 func main() {
-	fx.New(
-		// Kronos SDK (provides registry and other services)
-		kronos.Module,
+	// Parse CLI first - exits early if --help is used
+	cliArgs := cli.ParseCLI()
 
-		// External connectors (registers with registry)
-		connectors.Module,
+	// If we get here, user wants to run a strategy - initialize fx
+	if cliArgs != nil {
+		fx.New(
+			// Kronos SDK (provides registry and other services)
+			kronos.Module,
 
-		// CLI commands
-		cli.Module,
-	).Run()
+			// External connectors (registers with registry)
+			connectors.Module,
+
+			// CLI module
+			cli.Module,
+
+			// Supply parsed CLI args
+			fx.Supply(cliArgs),
+
+			// Execute the strategy
+			fx.Invoke(cli.ExecuteStrategy),
+		).Run()
+	}
 }

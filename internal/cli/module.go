@@ -17,60 +17,108 @@ import (
 var Module = fx.Module("cli",
 	fx.Provide(
 		arguments.NewRegistry,
-		NewRunCmd,
 	),
-	fx.Invoke(RunCLI),
 )
 
-// NewRunCmd creates the run command
-func NewRunCmd(argRegistry *arguments.Registry) *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "run",
-		Short: "Run a trading strategy",
-	}
-
-	cmd.Flags().StringP("exchange", "e", "", "Exchange to connect to (paradex, bybit, etc.)")
-	cmd.Flags().StringP("strategy", "s", "", "Path to strategy plugin (.so file)")
-	cmd.MarkFlagRequired("exchange")
-	cmd.MarkFlagRequired("strategy")
-
-	// Register all exchange-specific flags
-	argRegistry.RegisterAllFlags(cmd)
-
-	return cmd
+// CLIArgs holds parsed command-line arguments
+type CLIArgs struct {
+	Exchange     string
+	StrategyPath string
+	RawArgs      []string
 }
 
-// RunCLI executes the cobra CLI with fx dependencies
-func RunCLI(runCmd *cobra.Command, registry registry.ConnectorRegistry, argRegistry *arguments.Registry) {
+// ParseCLI parses command-line arguments without initializing fx
+// Returns nil if help was requested or command doesn't need fx
+func ParseCLI() *CLIArgs {
+	var cliArgs *CLIArgs
+
 	rootCmd := &cobra.Command{
 		Use:   "kronos-live",
 		Short: "Kronos live trading CLI",
 	}
 
-	rootCmd.AddCommand(runCmd)
+	runCmd := &cobra.Command{
+		Use:   "run",
+		Short: "Run a trading strategy",
+		Long: `Run a trading strategy on a live exchange.
 
-	// Set the run command's RunE function with injected dependencies
-	runCmd.RunE = func(cmd *cobra.Command, args []string) error {
-		return runStrategy(cmd, registry, argRegistry)
+To see exchange-specific options, specify the exchange:
+  kronos-live run --exchange paradex --help
+
+Examples:
+  # Run with Paradex
+  kronos-live run --exchange paradex --strategy ./strategy.so \
+    --paradex-account-address 0x... --paradex-eth-private-key 0x...`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			exchange, _ := cmd.Flags().GetString("exchange")
+			strategyPath, _ := cmd.Flags().GetString("strategy")
+
+			if exchange == "" {
+				return fmt.Errorf("--exchange is required")
+			}
+			if strategyPath == "" {
+				return fmt.Errorf("--strategy is required")
+			}
+
+			// Store parsed args for fx execution
+			cliArgs = &CLIArgs{
+				Exchange:     exchange,
+				StrategyPath: strategyPath,
+				RawArgs:      os.Args,
+			}
+			return nil
+		},
 	}
 
+	runCmd.Flags().StringP("exchange", "e", "", "Exchange to connect to (paradex, bybit, etc.)")
+	runCmd.Flags().StringP("strategy", "s", "", "Path to strategy plugin (.so file)")
+
+	// Check if user wants help for a specific exchange
+	for i, arg := range os.Args {
+		if arg == "--exchange" || arg == "-e" {
+			if i+1 < len(os.Args) {
+				exchange := os.Args[i+1]
+				// Add exchange-specific flags for help
+				registry := arguments.NewRegistry()
+				if handler, err := registry.GetHandler(exchange); err == nil {
+					handler.RegisterFlags(runCmd)
+				}
+				break
+			}
+		}
+	}
+
+	rootCmd.AddCommand(runCmd)
+
+	// Execute cobra - will return early if --help is used
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
+
+	return cliArgs
 }
 
-// runStrategy executes the strategy with access to the registry
-func runStrategy(cmd *cobra.Command, registry registry.ConnectorRegistry, argRegistry *arguments.Registry) error {
-	exchange, _ := cmd.Flags().GetString("exchange")
-	strategyPath, _ := cmd.Flags().GetString("strategy")
+// ExecuteStrategy runs the trading strategy with fx dependencies
+func ExecuteStrategy(cliArgs *CLIArgs, registry registry.ConnectorRegistry, argRegistry *arguments.Registry) error {
+	fmt.Printf("Running strategy: %s on exchange: %s\n", cliArgs.StrategyPath, cliArgs.Exchange)
 
-	fmt.Printf("Running strategy: %s on exchange: %s\n", strategyPath, exchange)
+	// Recreate cobra command to parse exchange-specific flags
+	cmd := &cobra.Command{Use: "run"}
+	cmd.Flags().StringP("exchange", "e", "", "")
+	cmd.Flags().StringP("strategy", "s", "", "")
 
-	// Get argument handler for this exchange
-	argHandler, err := argRegistry.GetHandler(exchange)
+	// Get argument handler and register its flags
+	argHandler, err := argRegistry.GetHandler(cliArgs.Exchange)
 	if err != nil {
 		return err
+	}
+	argHandler.RegisterFlags(cmd)
+
+	// Parse the original args
+	cmd.SetArgs(cliArgs.RawArgs[2:]) // Skip "kronos-live run"
+	if err := cmd.ParseFlags(cliArgs.RawArgs[2:]); err != nil {
+		return fmt.Errorf("failed to parse flags: %w", err)
 	}
 
 	// Parse config from flags
@@ -81,13 +129,13 @@ func runStrategy(cmd *cobra.Command, registry registry.ConnectorRegistry, argReg
 
 	// Convert string to ExchangeName
 	var exchangeName connector.ExchangeName
-	switch exchange {
+	switch cliArgs.Exchange {
 	case "paradex":
 		exchangeName = connector.Paradex
 	case "bybit":
 		exchangeName = connector.Bybit
 	default:
-		return fmt.Errorf("unsupported exchange: %s", exchange)
+		return fmt.Errorf("unsupported exchange: %s", cliArgs.Exchange)
 	}
 
 	// Get connector from registry
@@ -101,7 +149,7 @@ func runStrategy(cmd *cobra.Command, registry registry.ConnectorRegistry, argReg
 	// Initialize connector with config
 	initConn, ok := conn.(pkgconnector.Initializable)
 	if !ok {
-		return fmt.Errorf("connector %s does not support initialization", exchange)
+		return fmt.Errorf("connector %s does not support initialization", cliArgs.Exchange)
 	}
 
 	if err := initConn.Initialize(config); err != nil {
