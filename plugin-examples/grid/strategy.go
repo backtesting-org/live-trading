@@ -27,7 +27,7 @@ type GridConfig struct {
 }
 
 // NewGridStrategy creates a new grid strategy instance
-func NewGridStrategy(k *kronos.KronosExecutor, config GridConfig) *GridStrategy {
+func NewGridStrategy(k *kronos.KronosExecutor, config GridConfig) strategy.Strategy {
 	base := strategy.NewBaseStrategy(
 		strategy.StrategyName("Grid Trading"),
 		"Market-neutral grid trading strategy",
