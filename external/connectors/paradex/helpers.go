@@ -8,7 +8,7 @@ import (
 	"github.com/trishtzy/go-paradex/models"
 )
 
-func (p *Paradex) convertParadexOrder(paradexOrder *models.ResponsesOrderResp) connector.Order {
+func (p *paradex) convertParadexOrder(paradexOrder *models.ResponsesOrderResp) connector.Order {
 	// Parse decimal values with error handling
 	quantity, _ := decimal.NewFromString(paradexOrder.Size)
 	price, _ := decimal.NewFromString(paradexOrder.Price)
@@ -39,7 +39,7 @@ func (p *Paradex) convertParadexOrder(paradexOrder *models.ResponsesOrderResp) c
 	}
 }
 
-func (p *Paradex) convertOrderType(orderType models.ResponsesOrderType) connector.OrderType {
+func (p *paradex) convertOrderType(orderType models.ResponsesOrderType) connector.OrderType {
 	switch orderType {
 	case "MARKET":
 		return connector.OrderTypeMarket
@@ -58,7 +58,7 @@ func (p *Paradex) convertOrderType(orderType models.ResponsesOrderType) connecto
 	}
 }
 
-func (p *Paradex) convertOrderStatus(status models.ResponsesOrderStatus) connector.OrderStatus {
+func (p *paradex) convertOrderStatus(status models.ResponsesOrderStatus) connector.OrderStatus {
 	switch status {
 	case "OPEN":
 		return connector.OrderStatusOpen
@@ -77,7 +77,7 @@ func (p *Paradex) convertOrderStatus(status models.ResponsesOrderStatus) connect
 	}
 }
 
-func (p *Paradex) convertOrderSide(side models.ResponsesOrderSide) connector.OrderSide {
+func (p *paradex) convertOrderSide(side models.ResponsesOrderSide) connector.OrderSide {
 	switch side {
 	case "BUY":
 		return connector.OrderSideBuy

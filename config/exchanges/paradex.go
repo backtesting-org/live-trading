@@ -20,6 +20,12 @@ type Paradex struct {
 	UseTestnet     bool          `mapstructure:"use_testnet"`
 }
 
+// Validate implements the Config interface
+func (c *Paradex) Validate() error {
+	validate := validator.New()
+	return validate.Struct(c)
+}
+
 func (c *Paradex) LoadParadexConfig() {
 	viper.Set("paradex.base_url", os.Getenv("PARADEX_BASE_URL"))
 	viper.Set("paradex.websocket_url", os.Getenv("PARADEX_WEBSOCKET_URL"))
@@ -57,9 +63,4 @@ func (c *Paradex) LoadParadexConfig() {
 	if err != nil {
 		panic(fmt.Sprintf("ParadexConfig validation failed: %v", err))
 	}
-}
-
-func (c *Paradex) Validate() error {
-	validate := validator.New()
-	return validate.Struct(c)
 }

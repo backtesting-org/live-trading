@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/backtesting-org/kronos-sdk/pkg/types/logging"
-	exchange "github.com/backtesting-org/live-trading/config/exchanges"
 	"github.com/trishtzy/go-paradex/client/authentication"
 
 	"github.com/trishtzy/go-paradex/auth"
@@ -31,9 +30,16 @@ type Client struct {
 	mu                sync.RWMutex
 }
 
-func NewClient(cfg *exchange.Paradex, logger logging.ApplicationLogger) (*Client, error) {
+type Config struct {
+	BaseURL       string
+	StarknetRPC   string
+	EthPrivateKey string
+	Network       string
+}
+
+func NewClient(cfg *Config, logger logging.ApplicationLogger) (*Client, error) {
 	host := "api.prod.paradex.trade"
-	if cfg.UseTestnet {
+	if cfg.Network == "testnet" {
 		host = "api.testnet.paradex.trade"
 	}
 
@@ -66,7 +72,7 @@ func NewClient(cfg *exchange.Paradex, logger logging.ApplicationLogger) (*Client
 		dexAccountAddress: dexAccountAddr,
 		ethereumAddress:   ethAddress,
 		systemConfig:      systemConfig,
-		useTestnet:        cfg.UseTestnet,
+		useTestnet:        cfg.Network == "testnet",
 	}, nil
 }
 

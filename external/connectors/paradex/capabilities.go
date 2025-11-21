@@ -8,7 +8,7 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-func (p *Paradex) GetConnectorInfo() *connector.Info {
+func (p *paradex) GetConnectorInfo() *connector.Info {
 	return &connector.Info{
 		Name:             connector.Paradex,
 		TradingEnabled:   p.SupportsTradingOperations(),
@@ -22,26 +22,26 @@ func (p *Paradex) GetConnectorInfo() *connector.Info {
 	}
 }
 
-func (p *Paradex) GetPerpSymbol(symbol portfolio.Asset) string {
+func (p *paradex) GetPerpSymbol(symbol portfolio.Asset) string {
 	return fmt.Sprintf("%s-USD-PERP", symbol.Symbol())
 }
 
-func (p *Paradex) SupportsTradingOperations() bool {
+func (p *paradex) SupportsTradingOperations() bool {
 	return true
 }
 
-func (p *Paradex) SupportsRealTimeData() bool {
+func (p *paradex) SupportsRealTimeData() bool {
 	return true
 }
 
-func (p *Paradex) SupportsFundingRates() bool {
+func (p *paradex) SupportsFundingRates() bool {
 	return true
 }
 
-func (p *Paradex) SupportsPerpetuals() bool {
+func (p *paradex) SupportsPerpetuals() bool {
 	return true
 }
 
-func (p *Paradex) SupportsSpot() bool {
+func (p *paradex) SupportsSpot() bool {
 	return false
 }

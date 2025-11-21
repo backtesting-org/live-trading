@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	performance2 "github.com/backtesting-org/live-trading/external/websocket/performance"
+	"github.com/backtesting-org/live-trading/external/websocket/performance"
 	"github.com/backtesting-org/live-trading/external/websocket/security"
 	"github.com/gorilla/websocket"
 )
@@ -44,8 +44,8 @@ func (cs ConnectionState) String() string {
 type ConnectionManager struct {
 	config         Config
 	authManager    *security.AuthManager
-	metrics        *performance2.Metrics
-	circuitBreaker *performance2.CircuitBreaker
+	metrics        *performance.Metrics
+	circuitBreaker *performance.CircuitBreaker
 	logger         security.Logger
 
 	conn       *websocket.Conn
@@ -67,14 +67,14 @@ type ConnectionManager struct {
 func NewConnectionManager(
 	config Config,
 	authManager *security.AuthManager,
-	metrics *performance2.Metrics,
+	metrics *performance.Metrics,
 	logger security.Logger,
 ) *ConnectionManager {
 	return &ConnectionManager{
 		config:         config,
 		authManager:    authManager,
 		metrics:        metrics,
-		circuitBreaker: performance2.NewCircuitBreaker(3, 30*time.Second),
+		circuitBreaker: performance.NewCircuitBreaker(3, 30*time.Second),
 		logger:         logger,
 		state:          StateDisconnected,
 	}

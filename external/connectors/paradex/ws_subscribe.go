@@ -7,31 +7,31 @@ import (
 	"github.com/backtesting-org/kronos-sdk/pkg/types/portfolio"
 )
 
-func (p *Paradex) SubscribePositions(asset portfolio.Asset, instrumentType connector.Instrument) error {
+func (p *paradex) SubscribePositions(asset portfolio.Asset, instrumentType connector.Instrument) error {
 	// TODO: Implement position subscription
 	p.appLogger.Info("Position subscription requested for %s %s - not yet implemented", asset.Symbol(), instrumentType)
 	return nil
 }
 
-func (p *Paradex) UnsubscribePositions(asset portfolio.Asset, instrumentType connector.Instrument) error {
+func (p *paradex) UnsubscribePositions(asset portfolio.Asset, instrumentType connector.Instrument) error {
 	// TODO: Implement position unsubscription
 	p.appLogger.Info("Position unsubscription requested for %s %s - not yet implemented", asset.Symbol(), instrumentType)
 	return nil
 }
 
-func (p *Paradex) SubscribeAccountBalance() error {
+func (p *paradex) SubscribeAccountBalance() error {
 	// TODO: Implement account balance subscription
 	p.appLogger.Info("Account balance subscription requested - not yet implemented")
 	return nil
 }
 
-func (p *Paradex) UnsubscribeAccountBalance() error {
+func (p *paradex) UnsubscribeAccountBalance() error {
 	// TODO: Implement account balance unsubscription
 	p.appLogger.Info("Account balance unsubscription requested - not yet implemented")
 	return nil
 }
 
-func (p *Paradex) SubscribeOrderBook(asset portfolio.Asset, instrumentType connector.Instrument) error {
+func (p *paradex) SubscribeOrderBook(asset portfolio.Asset, instrumentType connector.Instrument) error {
 	if !p.IsWebSocketConnected() {
 		return fmt.Errorf("WebSocket not connected")
 	}
@@ -42,7 +42,7 @@ func (p *Paradex) SubscribeOrderBook(asset portfolio.Asset, instrumentType conne
 
 	symbol := p.GetPerpSymbol(asset)
 
-	if err := p.wsService.SubscribeOrderbook(symbol); err != nil {
+	if err := p.wsService.SubscribeOrderBook(symbol); err != nil {
 		return fmt.Errorf("failed to subscribe to orderbook for %s: %w", asset.Symbol(), err)
 	}
 
@@ -50,7 +50,7 @@ func (p *Paradex) SubscribeOrderBook(asset portfolio.Asset, instrumentType conne
 	return nil
 }
 
-func (p *Paradex) UnsubscribeOrderBook(asset portfolio.Asset, instrumentType connector.Instrument) error {
+func (p *paradex) UnsubscribeOrderBook(asset portfolio.Asset, instrumentType connector.Instrument) error {
 	if !p.IsWebSocketConnected() {
 		return fmt.Errorf("WebSocket not connected")
 	}
@@ -69,7 +69,7 @@ func (p *Paradex) UnsubscribeOrderBook(asset portfolio.Asset, instrumentType con
 	return nil
 }
 
-func (p *Paradex) SubscribeTrades(asset portfolio.Asset, instrumentType connector.Instrument) error {
+func (p *paradex) SubscribeTrades(asset portfolio.Asset, instrumentType connector.Instrument) error {
 	if !p.IsWebSocketConnected() {
 		return fmt.Errorf("WebSocket not connected")
 	}
@@ -88,7 +88,7 @@ func (p *Paradex) SubscribeTrades(asset portfolio.Asset, instrumentType connecto
 	return nil
 }
 
-func (p *Paradex) UnsubscribeTrades(asset portfolio.Asset, instrumentType connector.Instrument) error {
+func (p *paradex) UnsubscribeTrades(asset portfolio.Asset, instrumentType connector.Instrument) error {
 	if !p.IsWebSocketConnected() {
 		return fmt.Errorf("WebSocket not connected")
 	}
@@ -107,7 +107,7 @@ func (p *Paradex) UnsubscribeTrades(asset portfolio.Asset, instrumentType connec
 	return nil
 }
 
-func (p *Paradex) SubscribeKlines(asset portfolio.Asset, interval string) error {
+func (p *paradex) SubscribeKlines(asset portfolio.Asset, interval string) error {
 	if !p.IsWebSocketConnected() {
 		return fmt.Errorf("WebSocket not connected")
 	}
@@ -122,7 +122,7 @@ func (p *Paradex) SubscribeKlines(asset portfolio.Asset, interval string) error 
 	return nil
 }
 
-func (p *Paradex) UnsubscribeKlines(asset portfolio.Asset, interval string) error {
+func (p *paradex) UnsubscribeKlines(asset portfolio.Asset, interval string) error {
 	if !p.IsWebSocketConnected() {
 		return fmt.Errorf("WebSocket not connected")
 	}

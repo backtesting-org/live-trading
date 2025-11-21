@@ -44,12 +44,14 @@ plugins:
 	@cd plugin-examples/momentum && go build -buildmode=plugin -o ../../plugins/momentum.so .
 	@echo "Plugins built in ./plugins/"
 
-# Clean build artifacts
-clean:
-	@echo "Cleaning build artifacts..."
-	@rm -rf bin/
-	@rm -rf plugins/
-	@echo "Clean complete"
+# Build the CLI
+build-cli:
+	@echo "Building kronos-live CLI..."
+	go build -o bin/kronos-live cmd/live/main.go
+	@echo "CLI build complete: bin/kronos-live"
+
+# Build both server and CLI
+build-all: build build-cli
 
 # Run migrations manually (requires DATABASE_CONNECTION_STRING env var)
 migrate:

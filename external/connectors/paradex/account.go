@@ -9,7 +9,7 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-func (p *Paradex) GetAccountBalance() (*connector.AccountBalance, error) {
+func (p *paradex) GetAccountBalance() (*connector.AccountBalance, error) {
 	account, err := p.paradexService.GetAccount(p.ctx)
 	if err != nil {
 		return nil, err
@@ -44,7 +44,7 @@ func (p *Paradex) GetAccountBalance() (*connector.AccountBalance, error) {
 	}, nil
 }
 
-func (p *Paradex) GetPositions() ([]connector.Position, error) {
+func (p *paradex) GetPositions() ([]connector.Position, error) {
 	positionsResp, err := p.paradexService.GetUserPositions(p.ctx) // returns *models.ResponsesGetPositionsResp
 	if err != nil {
 		return nil, err
@@ -56,7 +56,7 @@ func (p *Paradex) GetPositions() ([]connector.Position, error) {
 		entryPrice, _ := decimal.NewFromString(pos.AverageEntryPrice)
 		unrealizedPnL, _ := decimal.NewFromString(pos.UnrealizedPnl)
 
-		// MarkPrice is not in the Paradex API, so set to zero
+		// MarkPrice is not in the paradex API, so set to zero
 		var markPrice decimal.Decimal
 
 		realizedPnL, _ := decimal.NewFromString(pos.RealizedPositionalPnl)
@@ -79,11 +79,11 @@ func (p *Paradex) GetPositions() ([]connector.Position, error) {
 }
 
 // GetSubAccounts returns all sub-accounts for the current account
-func (p *Paradex) GetSubAccounts(ctx context.Context) (interface{}, error) {
+func (p *paradex) GetSubAccounts(ctx context.Context) (interface{}, error) {
 	return p.paradexService.GetSubAccounts(ctx)
 }
 
 // GetAccountInfo returns account information
-func (p *Paradex) GetAccountInfo(ctx context.Context) (interface{}, error) {
+func (p *paradex) GetAccountInfo(ctx context.Context) (interface{}, error) {
 	return p.paradexService.GetAccountInfo(ctx)
 }

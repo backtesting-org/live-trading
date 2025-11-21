@@ -2,13 +2,14 @@ package paradex
 
 import (
 	"fmt"
+	"time"
+
 	"github.com/backtesting-org/kronos-sdk/pkg/types/connector"
 	"github.com/backtesting-org/kronos-sdk/pkg/types/portfolio"
 	"github.com/shopspring/decimal"
-	"time"
 )
 
-func (p *Paradex) FetchPrice(symbol string) (*connector.Price, error) {
+func (p *paradex) FetchPrice(symbol string) (*connector.Price, error) {
 	price, err := p.paradexService.GetPrice(p.ctx, symbol)
 
 	if err != nil {
@@ -32,15 +33,15 @@ func (p *Paradex) FetchPrice(symbol string) (*connector.Price, error) {
 		Price:     priceValue,
 		BidPrice:  priceValue,
 		AskPrice:  priceValue,
-		Volume24h: decimal.Zero, // Volume not provided by Paradex
-		Change24h: decimal.Zero, // Change not provided by Paradex
+		Volume24h: decimal.Zero, // Volume not provided by paradex
+		Change24h: decimal.Zero, // Change not provided by paradex
 		Source:    p.GetConnectorInfo().Name,
-		Timestamp: time.Now(), // Use current time as Paradex does not provide timestamp
+		Timestamp: time.Now(), // Use current time as paradex does not provide timestamp
 	}, nil
 
 }
 
-func (p *Paradex) FetchOrderBook(symbol portfolio.Asset, instrument connector.Instrument, depth int) (*connector.OrderBook, error) {
+func (p *paradex) FetchOrderBook(symbol portfolio.Asset, instrument connector.Instrument, depth int) (*connector.OrderBook, error) {
 	if instrument != connector.TypePerpetual {
 		return nil, fmt.Errorf("order book only supported for perpetual contracts")
 	}
@@ -73,7 +74,7 @@ func (p *Paradex) FetchOrderBook(symbol portfolio.Asset, instrument connector.In
 		}
 	}
 
-	// Use the actual timestamp from Paradex if available
+	// Use the actual timestamp from paradex if available
 	timestamp := time.Now()
 	if orderBook.LastUpdatedAt > 0 {
 		timestamp = time.UnixMilli(orderBook.LastUpdatedAt)
@@ -87,11 +88,11 @@ func (p *Paradex) FetchOrderBook(symbol portfolio.Asset, instrument connector.In
 	}, nil
 }
 
-func (p *Paradex) FetchRecentTrades(symbol string, limit int) ([]connector.Trade, error) {
+func (p *paradex) FetchRecentTrades(symbol string, limit int) ([]connector.Trade, error) {
 	return nil, fmt.Errorf("klines not needed for MM strategy")
 }
 
-func (p *Paradex) FetchKlines(symbol, interval string, limit int) ([]connector.Kline, error) {
+func (p *paradex) FetchKlines(symbol, interval string, limit int) ([]connector.Kline, error) {
 	// Convert interval string (e.g., "5m", "1h") to resolution in minutes
 	resolution, err := parseIntervalToMinutes(interval)
 	if err != nil {
@@ -107,7 +108,7 @@ func (p *Paradex) FetchKlines(symbol, interval string, limit int) ([]connector.K
 	startMs := startTime.UnixMilli()
 	endMs := endTime.UnixMilli()
 
-	// Fetch klines from Paradex
+	// Fetch klines from paradex
 	klineData, err := p.paradexService.GetKlines(p.ctx, symbol, resolution, startMs, endMs)
 	if err != nil {
 		p.appLogger.Error("Failed to fetch klines", "symbol", symbol, "interval", interval, "error", err)
@@ -118,14 +119,14 @@ func (p *Paradex) FetchKlines(symbol, interval string, limit int) ([]connector.K
 	klines := make([]connector.Kline, 0, len(klineData))
 	for _, k := range klineData {
 		klines = append(klines, connector.Kline{
-			Symbol:    symbol,
-			Interval:  interval,
-			OpenTime:  time.UnixMilli(k.Timestamp),
-			Open:      decimal.NewFromFloat(k.Open),
-			High:      decimal.NewFromFloat(k.High),
-			Low:       decimal.NewFromFloat(k.Low),
-			Close:     decimal.NewFromFloat(k.Close),
-			Volume:    decimal.NewFromFloat(k.Volume),
+			Symbol:   symbol,
+			Interval: interval,
+			OpenTime: time.UnixMilli(k.Timestamp),
+			Open:     decimal.NewFromFloat(k.Open),
+			High:     decimal.NewFromFloat(k.High),
+			Low:      decimal.NewFromFloat(k.Low),
+			Close:    decimal.NewFromFloat(k.Close),
+			Volume:   decimal.NewFromFloat(k.Volume),
 		})
 	}
 
@@ -158,10 +159,10 @@ func parseIntervalToMinutes(interval string) (int, error) {
 	}
 }
 
-func (p *Paradex) FetchRiskFundBalance(symbol string) (*connector.RiskFundBalance, error) {
+func (p *paradex) FetchRiskFundBalance(symbol string) (*connector.RiskFundBalance, error) {
 	return nil, fmt.Errorf("risk fund balance not needed for MM strategy")
 }
 
-func (p *Paradex) FetchContracts() ([]connector.ContractInfo, error) {
+func (p *paradex) FetchContracts() ([]connector.ContractInfo, error) {
 	return nil, fmt.Errorf("contracts not needed for MM strategy")
 }
