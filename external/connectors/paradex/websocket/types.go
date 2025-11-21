@@ -22,10 +22,15 @@ type WebSocketService interface {
 	SubscribeTrades(asset string) error
 	SubscribeAccount() error
 
+	UnsubscribeOrderbook(symbol string) error
+	UnsubscribeTrades(symbol string) error
+	UnsubscribeAccount() error
+
 	// Data channels
 	OrderbookUpdates() <-chan OrderbookUpdate
 	TradeUpdates() <-chan TradeUpdate
 	AccountUpdates() <-chan AccountUpdate
+	KlineUpdates() <-chan KlineUpdate
 	ErrorChannel() <-chan error
 
 	// Metrics

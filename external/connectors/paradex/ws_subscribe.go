@@ -42,7 +42,7 @@ func (p *paradex) SubscribeOrderBook(asset portfolio.Asset, instrumentType conne
 
 	symbol := p.GetPerpSymbol(asset)
 
-	if err := p.wsService.SubscribeOrderbook(symbol); err != nil {
+	if err := p.wsService.SubscribeOrderBook(symbol); err != nil {
 		return fmt.Errorf("failed to subscribe to orderbook for %s: %w", asset.Symbol(), err)
 	}
 
