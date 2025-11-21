@@ -3,7 +3,7 @@ package main
 import (
 	"time"
 
-	"github.com/backtesting-org/kronos-sdk/pkg/kronos"
+	"github.com/backtesting-org/kronos-sdk/kronos"
 	"github.com/backtesting-org/kronos-sdk/pkg/types/connector"
 	"github.com/backtesting-org/kronos-sdk/pkg/types/strategy"
 	"github.com/google/uuid"
@@ -13,12 +13,9 @@ import (
 // GridStrategy implements grid trading using Kronos SDK
 type GridStrategy struct {
 	*strategy.BaseStrategy
-	k      *kronos.Kronos
+	k      *kronos.KronosExecutor
 	config GridConfig
 }
-
-// SetKronos injects the Kronos context at runtime
-func (gs *GridStrategy) SetKronos(k *kronos.Kronos) { gs.k = k }
 
 // GridConfig holds grid trading parameters
 type GridConfig struct {
@@ -30,7 +27,7 @@ type GridConfig struct {
 }
 
 // NewGridStrategy creates a new grid strategy instance
-func NewGridStrategy(k *kronos.Kronos, config GridConfig) *GridStrategy {
+func NewGridStrategy(k *kronos.KronosExecutor, config GridConfig) strategy.Strategy {
 	base := strategy.NewBaseStrategy(
 		strategy.StrategyName("Grid Trading"),
 		"Market-neutral grid trading strategy",
@@ -45,26 +42,36 @@ func NewGridStrategy(k *kronos.Kronos, config GridConfig) *GridStrategy {
 	}
 }
 
+// GetRequiredAssets returns the assets this strategy needs
+func (gs *GridStrategy) GetRequiredAssets() []strategy.RequiredAsset {
+	return []strategy.RequiredAsset{
+		{
+			Symbol:      gs.k.Asset("BTC"),
+			Instruments: []connector.Instrument{connector.TypePerpetual},
+		},
+	}
+}
+
 // GetSignals generates trading signals for grid strategy
 func (gs *GridStrategy) GetSignals() ([]*strategy.Signal, error) {
 	if !gs.IsEnabled() {
 		return nil, nil
 	}
 
-    if gs.k == nil {
-        return nil, nil
-    }
+	if gs.k == nil {
+		return nil, nil
+	}
 
-    gs.k.Log().Info("GridTrading", "", "Scanning grid levels...")
+	gs.k.Log().Info("GridTrading", "", "Scanning grid levels...")
 
 	// Get BTC price
-    asset := gs.k.Asset("BTC")
+	asset := gs.k.Asset("BTC")
 	exchange := connector.Bybit
 
 	// Get order book using Kronos store
 	orderBook := gs.k.Store().GetOrderBook(asset, exchange, connector.TypePerpetual)
-    if orderBook == nil || len(orderBook.Bids) == 0 || len(orderBook.Asks) == 0 {
-        gs.k.Log().Info("GridTrading", "BTC", "No orderbook data available on %s", exchange)
+	if orderBook == nil || len(orderBook.Bids) == 0 || len(orderBook.Asks) == 0 {
+		gs.k.Log().Info("GridTrading", "BTC", "No orderbook data available on %s", exchange)
 		return nil, nil
 	}
 
@@ -114,7 +121,7 @@ func (gs *GridStrategy) GetSignals() ([]*strategy.Signal, error) {
 		signalsGenerated++
 	}
 
-    gs.k.Log().Info("GridTrading", "BTC", "Generated %d grid signals on %s (price: %s)", len(signals), exchange, currentPrice.StringFixed(2))
+	gs.k.Log().Info("GridTrading", "BTC", "Generated %d grid signals on %s (price: %s)", len(signals), exchange, currentPrice.StringFixed(2))
 	return signals, nil
 }
 
