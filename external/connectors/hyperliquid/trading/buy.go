@@ -19,11 +19,11 @@ func (t *tradingService) PlaceBuyMarketOrder(coin string, size, slippage float64
 }
 
 func (t *tradingService) PlaceBuyStopLoss(coin string, size, triggerPrice float64) (hyperliquid.OrderStatus, error) {
-	return t.placeTriggerOrder(coin, size, triggerPrice, true, "sl", true)
+	return t.placeTriggerOrder(coin, size, triggerPrice, true, true)
 }
 
 func (t *tradingService) PlaceBuyTakeProfit(coin string, size, triggerPrice float64) (hyperliquid.OrderStatus, error) {
-	return t.placeTriggerOrder(coin, size, triggerPrice, true, "tp", true)
+	return t.placeTriggerOrder(coin, size, triggerPrice, true, true)
 }
 
 func (t *tradingService) PlaceBuyLimitOrderWithCustomRef(coin string, size, price float64, customRef string) (hyperliquid.OrderStatus, error) {

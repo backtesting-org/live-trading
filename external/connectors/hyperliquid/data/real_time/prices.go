@@ -6,44 +6,46 @@ import (
 	"github.com/sonirico/go-hyperliquid"
 )
 
-func (r *realTimeService) SubscribeToAllPrices(callback func(hyperliquid.WSMessage)) (int, error) {
+func (r *realTimeService) SubscribeToOrderBook(coin string, callback func(*OrderBookMessage)) (int, error) {
 	ws, err := r.client.GetWebSocket()
 	if err != nil {
 		return 0, fmt.Errorf("websocket not configured: %w", err)
 	}
-	return ws.SubscribeToAllMids(callback)
+
+	// Wrap the user callback with parsing logic
+	wrappedCallback := func(msg hyperliquid.WSMessage) {
+		parsed, err := r.parser.ParseOrderBook(msg)
+		if err != nil {
+			// Parser already logs the error
+			return
+		}
+		if parsed.Coin == coin {
+			callback(parsed)
+		}
+	}
+
+	return ws.SubscribeToOrderbook(coin, wrappedCallback)
 }
 
-func (r *realTimeService) SubscribeToOrderBook(coin string, callback func(hyperliquid.WSMessage)) (int, error) {
+func (r *realTimeService) SubscribeToKlines(coin, interval string, callback func(*KlineMessage)) (int, error) {
 	ws, err := r.client.GetWebSocket()
 	if err != nil {
 		return 0, fmt.Errorf("websocket not configured: %w", err)
 	}
-	return ws.SubscribeToOrderbook(coin, callback)
-}
 
-func (r *realTimeService) SubscribeToBestBidOffer(coin string, callback func(hyperliquid.WSMessage)) (int, error) {
-	ws, err := r.client.GetWebSocket()
-	if err != nil {
-		return 0, fmt.Errorf("websocket not configured: %w", err)
+	// Wrap the user callback with parsing logic
+	wrappedCallback := func(msg hyperliquid.WSMessage) {
+		parsed, err := r.parser.ParseKline(msg)
+		if err != nil {
+			// Parser already logs the error
+			return
+		}
+		if parsed.Coin == coin {
+			callback(parsed)
+		}
 	}
-	return ws.SubscribeToBBO(coin, callback)
-}
 
-func (r *realTimeService) SubscribeToCandles(coin, interval string, callback func(hyperliquid.WSMessage)) (int, error) {
-	ws, err := r.client.GetWebSocket()
-	if err != nil {
-		return 0, fmt.Errorf("websocket not configured: %w", err)
-	}
-	return ws.SubscribeToCandles(coin, interval, callback)
-}
-
-func (r *realTimeService) SubscribeToActiveAssetContext(coin string, callback func(hyperliquid.WSMessage)) (int, error) {
-	ws, err := r.client.GetWebSocket()
-	if err != nil {
-		return 0, fmt.Errorf("websocket not configured: %w", err)
-	}
-	return ws.SubscribeToActiveAssetCtx(coin, callback)
+	return ws.SubscribeToCandles(coin, interval, wrappedCallback)
 }
 
 func (r *realTimeService) UnsubscribeFromOrderBook(coin string, subscriptionID int) error {

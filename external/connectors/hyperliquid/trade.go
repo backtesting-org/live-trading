@@ -48,12 +48,11 @@ func (h *hyperliquid) PlaceMarketOrder(symbol string, side connector.OrderSide, 
 
 	var result interface{}
 	var err error
-	slippage := 0.05 // 5% default slippage
 
 	if side == connector.OrderSideBuy {
-		result, err = h.trading.PlaceBuyMarketOrder(symbol, quantity.InexactFloat64(), slippage)
+		result, err = h.trading.PlaceBuyMarketOrder(symbol, quantity.InexactFloat64(), h.config.DefaultSlippage)
 	} else {
-		result, err = h.trading.PlaceSellMarketOrder(symbol, quantity.InexactFloat64(), slippage)
+		result, err = h.trading.PlaceSellMarketOrder(symbol, quantity.InexactFloat64(), h.config.DefaultSlippage)
 	}
 
 	if err != nil {

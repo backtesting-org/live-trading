@@ -58,11 +58,16 @@ func (m *marketDataService) GetAssetContext(coin string) (*AssetContext, error) 
 			return nil, fmt.Errorf("invalid context for asset %s", coin)
 		}
 
-		fundingStr, _ := ctx["funding"].(string)
-		markPxStr, _ := ctx["markPx"].(string)
-		oraclePxStr, _ := ctx["oraclePx"].(string)
-		premiumStr, _ := ctx["premium"].(string)
-		openInterestStr, _ := ctx["openInterest"].(string)
+		fundingStr, okFunding := ctx["funding"].(string)
+		markPxStr, okMark := ctx["markPx"].(string)
+		oraclePxStr, okOracle := ctx["oraclePx"].(string)
+		premiumStr, okPremium := ctx["premium"].(string)
+		openInterestStr, okOI := ctx["openInterest"].(string)
+
+		if !okFunding || !okMark || !okOracle || !okPremium || !okOI {
+			return nil, fmt.Errorf("missing required fields for asset %s (funding=%v, mark=%v, oracle=%v, premium=%v, oi=%v)",
+				coin, okFunding, okMark, okOracle, okPremium, okOI)
+		}
 
 		return &AssetContext{
 			Name:         name,
@@ -121,11 +126,16 @@ func (m *marketDataService) GetAllAssetContexts() ([]AssetContext, error) {
 			continue
 		}
 
-		fundingStr, _ := ctx["funding"].(string)
-		markPxStr, _ := ctx["markPx"].(string)
-		oraclePxStr, _ := ctx["oraclePx"].(string)
-		premiumStr, _ := ctx["premium"].(string)
-		openInterestStr, _ := ctx["openInterest"].(string)
+		fundingStr, okFunding := ctx["funding"].(string)
+		markPxStr, okMark := ctx["markPx"].(string)
+		oraclePxStr, okOracle := ctx["oraclePx"].(string)
+		premiumStr, okPremium := ctx["premium"].(string)
+		openInterestStr, okOI := ctx["openInterest"].(string)
+
+		if !okFunding || !okMark || !okOracle || !okPremium || !okOI {
+			// Skip assets with incomplete data rather than failing
+			continue
+		}
 
 		contexts = append(contexts, AssetContext{
 			Name:         name,

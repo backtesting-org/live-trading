@@ -151,7 +151,59 @@ func (h *hyperliquid) GetPerpSymbol(symbol portfolio.Asset) string {
 
 // FetchRecentTrades retrieves recent trades for the specified symbol
 func (h *hyperliquid) FetchRecentTrades(symbol string, limit int) ([]connector.Trade, error) {
-	return nil, fmt.Errorf("FetchRecentTrades not yet implemented for Hyperliquid")
+	// Get user's fills (their own trades)
+	fills, err := h.marketData.GetUserFills(h.config.AccountAddress)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get user fills: %w", err)
+	}
+
+	// Filter by symbol and convert to connector.Trade
+	trades := make([]connector.Trade, 0, limit)
+	for i, fill := range fills {
+		if i >= limit {
+			break
+		}
+
+		// Only include trades for the requested symbol
+		if fill.Coin != symbol {
+			continue
+		}
+
+		price, err := decimal.NewFromString(fill.Price)
+		if err != nil {
+			h.appLogger.Warn("Invalid price in fill",
+				"coin", fill.Coin,
+				"price", fill.Price,
+				"error", err)
+			continue
+		}
+
+		quantity, err := decimal.NewFromString(fill.Size)
+		if err != nil {
+			h.appLogger.Warn("Invalid quantity in fill",
+				"coin", fill.Coin,
+				"size", fill.Size,
+				"error", err)
+			continue
+		}
+
+		trades = append(trades, connector.Trade{
+			ID:        fmt.Sprintf("%d", fill.Oid),
+			Symbol:    fill.Coin,
+			Exchange:  connector.Hyperliquid,
+			Price:     price,
+			Quantity:  quantity,
+			Side:      connector.FromString(fill.Side),
+			Fee:       decimal.NewFromInt(0),
+			Timestamp: time.Unix(fill.Time/1000, 0),
+		})
+
+		if len(trades) >= limit {
+			break
+		}
+	}
+
+	return trades, nil
 }
 
 // FetchRiskFundBalance retrieves risk fund balance for the specified symbol

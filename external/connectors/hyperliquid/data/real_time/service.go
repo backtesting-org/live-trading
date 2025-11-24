@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/backtesting-org/kronos-sdk/pkg/types/logging"
 	"github.com/backtesting-org/live-trading/external/connectors/hyperliquid/clients"
-	"github.com/sonirico/go-hyperliquid"
 )
 
 // RealTimeService interface for WebSocket subscriptions
@@ -13,34 +13,30 @@ type RealTimeService interface {
 	Connect(ctx context.Context) error
 	Disconnect() error
 
-	// Price subscriptions
-	SubscribeToAllPrices(callback func(hyperliquid.WSMessage)) (int, error)
-	SubscribeToOrderBook(coin string, callback func(hyperliquid.WSMessage)) (int, error)
-	SubscribeToBestBidOffer(coin string, callback func(hyperliquid.WSMessage)) (int, error)
-	SubscribeToCandles(coin, interval string, callback func(hyperliquid.WSMessage)) (int, error)
-	SubscribeToActiveAssetContext(coin string, callback func(hyperliquid.WSMessage)) (int, error)
+	// Price subscriptions - callbacks receive parsed message types
+	SubscribeToOrderBook(coin string, callback func(*OrderBookMessage)) (int, error)
 	UnsubscribeFromOrderBook(coin string, subscriptionID int) error
 
-	// Trade subscriptions
-	SubscribeToTrades(coin string, callback func(hyperliquid.WSMessage)) (int, error)
+	// Trade subscriptions - callbacks receive parsed message types
+	SubscribeToTrades(coin string, callback func([]TradeMessage)) (int, error)
 	UnsubscribeFromTrades(coin string, subscriptionID int) error
 
-	// User subscriptions
-	SubscribeToUserEvents(user string, callback func(hyperliquid.WSMessage)) (int, error)
-	SubscribeToUserFills(user string, callback func(hyperliquid.WSMessage)) (int, error)
-	SubscribeToUserFundings(user string, callback func(hyperliquid.WSMessage)) (int, error)
-	SubscribeToOrderUpdates(callback func(hyperliquid.WSMessage)) (int, error)
-	SubscribeToWebData(user string, callback func(hyperliquid.WSMessage)) (int, error)
-	SubscribeToLedgerUpdates(user string, callback func(hyperliquid.WSMessage)) (int, error)
-	UnsubscribeFromUserEvents(user string, subscriptionID int) error
+	// User subscriptions - callbacks receive parsed message types
+	SubscribeToPositions(user string, callback func(*PositionMessage)) (int, error)
+	SubscribeToAccountBalance(user string, callback func(*AccountBalanceMessage)) (int, error)
+	SubscribeToKlines(coin, interval string, callback func(*KlineMessage)) (int, error)
 }
 
 type realTimeService struct {
 	client clients.WebSocketClient
+	parser *Parser
 }
 
-func NewRealTimeService(client clients.WebSocketClient) RealTimeService {
-	return &realTimeService{client: client}
+func NewRealTimeService(client clients.WebSocketClient, logger logging.ApplicationLogger) RealTimeService {
+	return &realTimeService{
+		client: client,
+		parser: NewParser(logger),
+	}
 }
 
 func (r *realTimeService) Connect(ctx context.Context) error {

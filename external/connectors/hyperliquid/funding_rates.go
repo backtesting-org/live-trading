@@ -20,16 +20,39 @@ func (h *hyperliquid) FetchCurrentFundingRates() (map[portfolio.Asset]connector.
 	for _, ctx := range contexts {
 		asset := portfolio.NewAsset(ctx.Name)
 
-		funding, _ := decimal.NewFromString(ctx.Funding)
-		markPrice, _ := decimal.NewFromString(ctx.MarkPrice)
-		oraclePrice, _ := decimal.NewFromString(ctx.OraclePrice)
+		funding, err := decimal.NewFromString(ctx.Funding)
+		if err != nil {
+			h.appLogger.Warn("Invalid funding rate, skipping asset",
+				"asset", ctx.Name,
+				"funding", ctx.Funding,
+				"error", err)
+			continue
+		}
+
+		markPrice, err := decimal.NewFromString(ctx.MarkPrice)
+		if err != nil {
+			h.appLogger.Warn("Invalid mark price, skipping asset",
+				"asset", ctx.Name,
+				"markPrice", ctx.MarkPrice,
+				"error", err)
+			continue
+		}
+
+		oraclePrice, err := decimal.NewFromString(ctx.OraclePrice)
+		if err != nil {
+			h.appLogger.Warn("Invalid oracle price, skipping asset",
+				"asset", ctx.Name,
+				"oraclePrice", ctx.OraclePrice,
+				"error", err)
+			continue
+		}
 
 		fundingRates[asset] = connector.FundingRate{
 			CurrentRate:     funding,
-			Timestamp:       time.Now(),
+			Timestamp:       h.timeProvider.Now(),
 			MarkPrice:       markPrice,
 			IndexPrice:      oraclePrice,
-			NextFundingTime: time.Now().Add(time.Hour),
+			NextFundingTime: h.timeProvider.Now(),
 		}
 	}
 
@@ -42,16 +65,27 @@ func (h *hyperliquid) FetchFundingRate(asset portfolio.Asset) (*connector.Fundin
 		return nil, fmt.Errorf("failed to get asset context: %w", err)
 	}
 
-	funding, _ := decimal.NewFromString(ctx.Funding)
-	markPrice, _ := decimal.NewFromString(ctx.MarkPrice)
-	oraclePrice, _ := decimal.NewFromString(ctx.OraclePrice)
+	funding, err := decimal.NewFromString(ctx.Funding)
+	if err != nil {
+		return nil, fmt.Errorf("invalid funding rate for %s: %w", asset.Symbol(), err)
+	}
+
+	markPrice, err := decimal.NewFromString(ctx.MarkPrice)
+	if err != nil {
+		return nil, fmt.Errorf("invalid mark price for %s: %w", asset.Symbol(), err)
+	}
+
+	oraclePrice, err := decimal.NewFromString(ctx.OraclePrice)
+	if err != nil {
+		return nil, fmt.Errorf("invalid oracle price for %s: %w", asset.Symbol(), err)
+	}
 
 	return &connector.FundingRate{
 		CurrentRate:     funding,
-		Timestamp:       time.Now(),
+		Timestamp:       h.timeProvider.Now(),
 		MarkPrice:       markPrice,
 		IndexPrice:      oraclePrice,
-		NextFundingTime: time.Now().Add(time.Hour),
+		NextFundingTime: h.timeProvider.Now().Add(time.Hour),
 	}, nil
 }
 

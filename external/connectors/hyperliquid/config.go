@@ -7,11 +7,12 @@ import (
 )
 
 type Config struct {
-	BaseURL        string
-	PrivateKey     string
-	AccountAddress string
-	VaultAddress   string
-	UseTestnet     bool
+	BaseURL         string
+	PrivateKey      string
+	AccountAddress  string
+	VaultAddress    string
+	UseTestnet      bool
+	DefaultSlippage float64 // Default slippage for market orders (0.005 = 0.5%)
 }
 
 var _ connector.Config = (*Config)(nil)
@@ -35,6 +36,16 @@ func (c *Config) Validate() error {
 		} else {
 			c.BaseURL = "https://api.hyperliquid.xyz"
 		}
+	}
+
+	// Set default slippage if not specified (0.5%)
+	if c.DefaultSlippage == 0 {
+		c.DefaultSlippage = 0.005
+	}
+
+	// Validate slippage is reasonable (0-10%)
+	if c.DefaultSlippage < 0 || c.DefaultSlippage > 0.1 {
+		return fmt.Errorf("default slippage must be between 0 and 0.1 (0-10%%), got: %f", c.DefaultSlippage)
 	}
 
 	return nil

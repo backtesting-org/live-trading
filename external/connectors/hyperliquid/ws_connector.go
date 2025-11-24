@@ -2,13 +2,11 @@ package hyperliquid
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"time"
 
 	"github.com/backtesting-org/kronos-sdk/pkg/types/connector"
 	"github.com/backtesting-org/kronos-sdk/pkg/types/portfolio"
-	hyperliquidsdk "github.com/sonirico/go-hyperliquid"
+	"github.com/backtesting-org/live-trading/external/connectors/hyperliquid/data/real_time"
 )
 
 // StartWebSocket starts the WebSocket connection for real-time data
@@ -70,62 +68,26 @@ func (h *hyperliquid) SubscribeOrderBook(asset portfolio.Asset, instrumentType c
 		return fmt.Errorf("connector not initialized")
 	}
 
-	subID, err := h.realTime.SubscribeToOrderBook(asset.Symbol(), func(msg hyperliquidsdk.WSMessage) {
-		if msg.Channel != "l2Book" {
-			return
-		}
-
-		var data map[string]interface{}
-		if err := json.Unmarshal(msg.Data, &data); err != nil {
-			return
-		}
-
-		coin, _ := data["coin"].(string)
-		if coin != asset.Symbol() {
-			return
-		}
-
-		levels, _ := data["levels"].([]interface{})
-		if len(levels) < 2 {
-			return
-		}
-
-		bids := []connector.PriceLevel{}
-		asks := []connector.PriceLevel{}
-
-		if bidData, ok := levels[0].([]interface{}); ok {
-			for _, bid := range bidData {
-				if bidLevel, ok := bid.(map[string]interface{}); ok {
-					priceStr, _ := bidLevel["px"].(string)
-					sizeStr, _ := bidLevel["sz"].(string)
-					price := parseDecimal(priceStr)
-					quantity := parseDecimal(sizeStr)
-					bids = append(bids, connector.PriceLevel{
-						Price:    price,
-						Quantity: quantity,
-					})
-				}
+	subID, err := h.realTime.SubscribeToOrderBook(asset.Symbol(), func(obMsg *real_time.OrderBookMessage) {
+		bids := make([]connector.PriceLevel, len(obMsg.Bids))
+		for i, bid := range obMsg.Bids {
+			bids[i] = connector.PriceLevel{
+				Price:    bid.Price,
+				Quantity: bid.Quantity,
 			}
 		}
 
-		if askData, ok := levels[1].([]interface{}); ok {
-			for _, ask := range askData {
-				if askLevel, ok := ask.(map[string]interface{}); ok {
-					priceStr, _ := askLevel["px"].(string)
-					sizeStr, _ := askLevel["sz"].(string)
-					price := parseDecimal(priceStr)
-					quantity := parseDecimal(sizeStr)
-					asks = append(asks, connector.PriceLevel{
-						Price:    price,
-						Quantity: quantity,
-					})
-				}
+		asks := make([]connector.PriceLevel, len(obMsg.Asks))
+		for i, ask := range obMsg.Asks {
+			asks[i] = connector.PriceLevel{
+				Price:    ask.Price,
+				Quantity: ask.Quantity,
 			}
 		}
 
 		orderBook := connector.OrderBook{
 			Asset:     asset,
-			Timestamp: time.Now(),
+			Timestamp: obMsg.Timestamp,
 			Bids:      bids,
 			Asks:      asks,
 		}
@@ -169,40 +131,16 @@ func (h *hyperliquid) SubscribeTrades(asset portfolio.Asset, instrumentType conn
 		return fmt.Errorf("connector not initialized")
 	}
 
-	subID, err := h.realTime.SubscribeToTrades(asset.Symbol(), func(msg hyperliquidsdk.WSMessage) {
-		if msg.Channel != "trades" {
-			return
-		}
-
-		var trades []interface{}
-		if err := json.Unmarshal(msg.Data, &trades); err != nil {
-			return
-		}
-
-		for _, tradeData := range trades {
-			trade, ok := tradeData.(map[string]interface{})
-			if !ok {
-				continue
-			}
-
-			coin, _ := trade["coin"].(string)
-			if coin != asset.Symbol() {
-				continue
-			}
-
-			priceStr, _ := trade["px"].(string)
-			sizeStr, _ := trade["sz"].(string)
-			sideStr, _ := trade["side"].(string)
-			timestamp, _ := trade["time"].(float64)
-
+	subID, err := h.realTime.SubscribeToTrades(asset.Symbol(), func(trades []real_time.TradeMessage) {
+		for _, trade := range trades {
 			select {
 			case h.tradeCh <- connector.Trade{
-				Symbol:    asset.Symbol(),
+				Symbol:    trade.Coin,
 				Exchange:  connector.Hyperliquid,
-				Price:     parseDecimal(priceStr),
-				Quantity:  parseDecimal(sizeStr),
-				Side:      connector.FromString(sideStr),
-				Timestamp: time.Unix(int64(timestamp)/1000, 0),
+				Price:     trade.Price,
+				Quantity:  trade.Quantity,
+				Side:      connector.FromString(trade.Side),
+				Timestamp: trade.Timestamp,
 			}:
 			default:
 			}
@@ -242,56 +180,29 @@ func (h *hyperliquid) SubscribePositions(asset portfolio.Asset, instrumentType c
 		return fmt.Errorf("connector not initialized")
 	}
 
-	subID, err := h.realTime.SubscribeToUserEvents(h.config.AccountAddress, func(msg hyperliquidsdk.WSMessage) {
-		if msg.Channel != "userEvents" {
+	subID, err := h.realTime.SubscribeToPositions(h.config.AccountAddress, func(posMsg *real_time.PositionMessage) {
+		if posMsg.Coin != asset.Symbol() {
 			return
 		}
 
-		var data map[string]interface{}
-		if err := json.Unmarshal(msg.Data, &data); err != nil {
-			return
+		side := connector.OrderSideBuy
+		if posMsg.Size.IsNegative() {
+			side = connector.OrderSideSell
 		}
 
-		positions, ok := data["positions"].([]interface{})
-		if !ok {
-			return
-		}
-
-		for _, posData := range positions {
-			pos, ok := posData.(map[string]interface{})
-			if !ok {
-				continue
-			}
-
-			coin, _ := pos["coin"].(string)
-			if coin != asset.Symbol() {
-				continue
-			}
-
-			sizeStr, _ := pos["szi"].(string)
-			entryPxStr, _ := pos["entryPx"].(string)
-			unrealizedPnlStr, _ := pos["unrealizedPnl"].(string)
-
-			size := parseDecimal(sizeStr)
-			side := connector.OrderSideBuy
-			if size.IsNegative() {
-				side = connector.OrderSideSell
-			}
-
-			select {
-			case h.positionCh <- connector.Position{
-				Symbol:        asset,
-				Exchange:      connector.Hyperliquid,
-				Side:          side,
-				Size:          size.Abs(),
-				EntryPrice:    parseDecimal(entryPxStr),
-				MarkPrice:     parseDecimal(entryPxStr),
-				UnrealizedPnL: parseDecimal(unrealizedPnlStr),
-				RealizedPnL:   parseDecimal("0"),
-				UpdatedAt:     time.Now(),
-			}:
-			default:
-			}
+		select {
+		case h.positionCh <- connector.Position{
+			Symbol:        asset,
+			Exchange:      connector.Hyperliquid,
+			Side:          side,
+			Size:          posMsg.Size.Abs(),
+			EntryPrice:    posMsg.EntryPrice,
+			MarkPrice:     posMsg.MarkPrice,
+			UnrealizedPnL: posMsg.UnrealizedPnl,
+			RealizedPnL:   parseDecimal("0"),
+			UpdatedAt:     posMsg.Timestamp,
+		}:
+		default:
 		}
 	})
 	if err != nil {
@@ -311,7 +222,7 @@ func (h *hyperliquid) UnsubscribePositions(asset portfolio.Asset, instrumentType
 	}
 
 	h.subMu.Lock()
-	subID, exists := h.subscriptions["positions:"+asset.Symbol()]
+	_, exists := h.subscriptions["positions:"+asset.Symbol()]
 	if !exists {
 		h.subMu.Unlock()
 		return fmt.Errorf("no active subscription for positions:%s", asset.Symbol())
@@ -319,7 +230,8 @@ func (h *hyperliquid) UnsubscribePositions(asset portfolio.Asset, instrumentType
 	delete(h.subscriptions, "positions:"+asset.Symbol())
 	h.subMu.Unlock()
 
-	return h.realTime.UnsubscribeFromUserEvents(h.config.AccountAddress, subID)
+	// No unsubscribe method for positions yet
+	return nil
 }
 
 // SubscribeAccountBalance subscribes to account balance updates
@@ -328,32 +240,14 @@ func (h *hyperliquid) SubscribeAccountBalance() error {
 		return fmt.Errorf("connector not initialized")
 	}
 
-	subID, err := h.realTime.SubscribeToUserEvents(h.config.AccountAddress, func(msg hyperliquidsdk.WSMessage) {
-		if msg.Channel != "userEvents" {
-			return
-		}
-
-		var data map[string]interface{}
-		if err := json.Unmarshal(msg.Data, &data); err != nil {
-			return
-		}
-
-		balances, ok := data["crossMarginSummary"].(map[string]interface{})
-		if !ok {
-			return
-		}
-
-		accountValue, _ := balances["accountValue"].(string)
-		totalMarginUsed, _ := balances["totalMarginUsed"].(string)
-		withdrawable, _ := balances["withdrawable"].(string)
-
+	subID, err := h.realTime.SubscribeToAccountBalance(h.config.AccountAddress, func(balMsg *real_time.AccountBalanceMessage) {
 		select {
 		case h.balanceCh <- connector.AccountBalance{
-			TotalBalance:     parseDecimal(accountValue),
-			AvailableBalance: parseDecimal(withdrawable),
-			UsedMargin:       parseDecimal(totalMarginUsed),
+			TotalBalance:     balMsg.TotalAccountValue,
+			AvailableBalance: balMsg.Withdrawable,
+			UsedMargin:       balMsg.TotalMarginUsed,
 			Currency:         "USD",
-			UpdatedAt:        time.Now(),
+			UpdatedAt:        balMsg.Timestamp,
 		}:
 		default:
 		}
@@ -375,7 +269,7 @@ func (h *hyperliquid) UnsubscribeAccountBalance() error {
 	}
 
 	h.subMu.Lock()
-	subID, exists := h.subscriptions["balance"]
+	_, exists := h.subscriptions["balance"]
 	if !exists {
 		h.subMu.Unlock()
 		return fmt.Errorf("no active subscription for balance")
@@ -383,7 +277,8 @@ func (h *hyperliquid) UnsubscribeAccountBalance() error {
 	delete(h.subscriptions, "balance")
 	h.subMu.Unlock()
 
-	return h.realTime.UnsubscribeFromUserEvents(h.config.AccountAddress, subID)
+	// No unsubscribe method for account balance yet
+	return nil
 }
 
 // SubscribeKlines subscribes to kline updates for an asset
@@ -392,39 +287,18 @@ func (h *hyperliquid) SubscribeKlines(asset portfolio.Asset, interval string) er
 		return fmt.Errorf("connector not initialized")
 	}
 
-	subID, err := h.realTime.SubscribeToCandles(asset.Symbol(), interval, func(msg hyperliquidsdk.WSMessage) {
-		if msg.Channel != "candle" {
-			return
-		}
-
-		var data map[string]interface{}
-		if err := json.Unmarshal(msg.Data, &data); err != nil {
-			return
-		}
-
-		coin, _ := data["s"].(string)
-		if coin != asset.Symbol() {
-			return
-		}
-
-		openPrice, _ := data["o"].(string)
-		highPrice, _ := data["h"].(string)
-		lowPrice, _ := data["l"].(string)
-		closePrice, _ := data["c"].(string)
-		volume, _ := data["v"].(string)
-		timestamp, _ := data["t"].(float64)
-
+	subID, err := h.realTime.SubscribeToKlines(asset.Symbol(), interval, func(klineMsg *real_time.KlineMessage) {
 		select {
 		case h.klineCh <- connector.Kline{
 			Symbol:    asset.Symbol(),
-			Interval:  interval,
-			OpenTime:  time.Unix(int64(timestamp)/1000, 0),
-			Open:      parseDecimal(openPrice),
-			High:      parseDecimal(highPrice),
-			Low:       parseDecimal(lowPrice),
-			Close:     parseDecimal(closePrice),
-			Volume:    parseDecimal(volume),
-			CloseTime: time.Unix(int64(timestamp)/1000, 0),
+			Interval:  klineMsg.Interval,
+			OpenTime:  klineMsg.OpenTime,
+			Open:      klineMsg.Open,
+			High:      klineMsg.High,
+			Low:       klineMsg.Low,
+			Close:     klineMsg.Close,
+			Volume:    klineMsg.Volume,
+			CloseTime: klineMsg.CloseTime,
 		}:
 		default:
 		}

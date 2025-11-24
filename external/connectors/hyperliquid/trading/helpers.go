@@ -27,7 +27,7 @@ func (t *tradingService) placeLimitOrder(coin string, size, price float64, isBuy
 	return ex.Order(req, nil)
 }
 
-func (t *tradingService) placeTriggerOrder(coin string, size, triggerPrice float64, isBuy bool, tpsl string, isMarket bool) (hyperliquid.OrderStatus, error) {
+func (t *tradingService) placeTriggerOrder(coin string, size, triggerPrice float64, isBuy bool, isMarket bool) (hyperliquid.OrderStatus, error) {
 	ex, err := t.client.GetExchange()
 	if err != nil {
 		return hyperliquid.OrderStatus{}, fmt.Errorf("exchange not configured: %w", err)
