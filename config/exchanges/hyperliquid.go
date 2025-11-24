@@ -9,7 +9,6 @@ import (
 )
 
 type HyperliquidConfig struct {
-	BaseURL        string `mapstructure:"base_url" validate:"required,url"`
 	PrivateKey     string `mapstructure:"private_key"`
 	AccountAddress string `mapstructure:"account_address"`
 	VaultAddress   string `mapstructure:"vault_address"`
@@ -17,7 +16,6 @@ type HyperliquidConfig struct {
 }
 
 func (c *HyperliquidConfig) LoadHyperliquidConfig() {
-	viper.Set("hyperliquid.base_url", os.Getenv("HYPERLIQUID_BASE_URL"))
 	viper.Set("hyperliquid.private_key", os.Getenv("HYPERLIQUID_PRIVATE_KEY"))
 	viper.Set("hyperliquid.account_address", os.Getenv("HYPERLIQUID_ACCOUNT_ADDRESS"))
 	viper.Set("hyperliquid.vault_address", os.Getenv("HYPERLIQUID_VAULT_ADDRESS"))

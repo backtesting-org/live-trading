@@ -22,8 +22,6 @@ require (
 	go.uber.org/zap v1.27.1
 )
 
-replace github.com/backtesting-org/kronos-sdk v0.0.2 => /Users/lukewatson/go/src/kronos/kronos-sdk
-
 require (
 	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/ProjectZKM/Ziren/crates/go-runtime/zkvm_runtime v0.0.0-20251001021608-1fe7b43fc4d6 // indirect

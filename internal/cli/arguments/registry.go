@@ -22,6 +22,7 @@ func NewRegistry() *Registry {
 		handlers: make(map[string]ArgumentHandler),
 	}
 	r.Register(NewParadexArguments())
+	r.Register(NewHyperliquidArguments())
 	return r
 }
 
