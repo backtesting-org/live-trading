@@ -6,19 +6,22 @@ import (
 	"time"
 
 	"github.com/backtesting-org/kronos-sdk/pkg/types/logging"
+	"github.com/backtesting-org/kronos-sdk/pkg/types/temporal"
 	"github.com/shopspring/decimal"
 	hyperliquidsdk "github.com/sonirico/go-hyperliquid"
 )
 
 // Parser handles parsing of WebSocket messages into typed structs
 type Parser struct {
-	logger logging.ApplicationLogger
+	logger       logging.ApplicationLogger
+	timeProvider temporal.TimeProvider
 }
 
 // NewParser creates a new WebSocket message parser
-func NewParser(logger logging.ApplicationLogger) *Parser {
+func NewParser(logger logging.ApplicationLogger, timeProvider temporal.TimeProvider) *Parser {
 	return &Parser{
-		logger: logger,
+		logger:       logger,
+		timeProvider: timeProvider,
 	}
 }
 
@@ -110,7 +113,7 @@ func (p *Parser) ParseOrderBook(msg hyperliquidsdk.WSMessage) (*OrderBookMessage
 
 	return &OrderBookMessage{
 		Coin:      coin,
-		Timestamp: time.Now(),
+		Timestamp: p.timeProvider.Now(),
 		Bids:      bids,
 		Asks:      asks,
 	}, nil
@@ -235,7 +238,7 @@ func (p *Parser) ParsePosition(msg hyperliquidsdk.WSMessage) (*PositionMessage, 
 		PositionValue:  positionValue,
 		UnrealizedPnl:  unrealizedPnl,
 		ReturnOnEquity: returnOnEquity,
-		Timestamp:      time.Now(),
+		Timestamp:      p.timeProvider.Now(),
 	}, nil
 }
 
@@ -274,7 +277,7 @@ func (p *Parser) ParseAccountBalance(msg hyperliquidsdk.WSMessage) (*AccountBala
 		Withdrawable:      withdrawable,
 		TotalNtlPos:       totalNtlPos,
 		TotalRawUsd:       totalRawUsd,
-		Timestamp:         time.Now(),
+		Timestamp:         p.timeProvider.Now(),
 	}, nil
 }
 
@@ -315,6 +318,6 @@ func (p *Parser) ParseKline(msg hyperliquidsdk.WSMessage) (*KlineMessage, error)
 		Low:       low,
 		Close:     close,
 		Volume:    volume,
-		Timestamp: time.Now(),
+		Timestamp: p.timeProvider.Now(),
 	}, nil
 }

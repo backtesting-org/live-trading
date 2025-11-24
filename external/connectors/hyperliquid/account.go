@@ -2,7 +2,6 @@ package hyperliquid
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/backtesting-org/kronos-sdk/pkg/types/connector"
 	"github.com/backtesting-org/kronos-sdk/pkg/types/portfolio"
@@ -21,7 +20,7 @@ func (h *hyperliquid) GetAccountBalance() (*connector.AccountBalance, error) {
 		UsedMargin:       parseDecimal(userState.MarginSummary.TotalMarginUsed),
 		UnrealizedPnL:    parseDecimal(userState.MarginSummary.TotalNtlPos),
 		Currency:         "USD",
-		UpdatedAt:        time.Now(),
+		UpdatedAt:        h.timeProvider.Now(),
 	}
 
 	return balance, nil
@@ -82,7 +81,7 @@ func (h *hyperliquid) GetPositions() ([]connector.Position, error) {
 			Leverage:         leverage,
 			MarginType:       pos.Leverage.Type,
 			LiquidationPrice: liquidationPrice,
-			UpdatedAt:        time.Now(),
+			UpdatedAt:        h.timeProvider.Now(),
 		})
 	}
 

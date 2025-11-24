@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/backtesting-org/kronos-sdk/pkg/types/logging"
+	"github.com/backtesting-org/kronos-sdk/pkg/types/temporal"
 	"github.com/backtesting-org/live-trading/external/connectors/hyperliquid/clients"
 )
 
@@ -32,10 +33,10 @@ type realTimeService struct {
 	parser *Parser
 }
 
-func NewRealTimeService(client clients.WebSocketClient, logger logging.ApplicationLogger) RealTimeService {
+func NewRealTimeService(client clients.WebSocketClient, logger logging.ApplicationLogger, timeProvider temporal.TimeProvider) RealTimeService {
 	return &realTimeService{
 		client: client,
-		parser: NewParser(logger),
+		parser: NewParser(logger, timeProvider),
 	}
 }
 

@@ -29,14 +29,14 @@ func (h *hyperliquid) PlaceLimitOrder(symbol string, side connector.OrderSide, q
 	}
 
 	return &connector.OrderResponse{
-		OrderID:   extractOrderID(result),
+		OrderID:   h.extractOrderID(result),
 		Symbol:    symbol,
 		Status:    connector.OrderStatusNew,
 		Side:      side,
 		Type:      connector.OrderTypeLimit,
 		Quantity:  quantity,
 		Price:     price,
-		Timestamp: time.Now(),
+		Timestamp: h.timeProvider.Now(),
 	}, nil
 }
 
@@ -60,13 +60,13 @@ func (h *hyperliquid) PlaceMarketOrder(symbol string, side connector.OrderSide, 
 	}
 
 	return &connector.OrderResponse{
-		OrderID:   extractOrderID(result),
+		OrderID:   h.extractOrderID(result),
 		Symbol:    symbol,
 		Status:    connector.OrderStatusNew,
 		Side:      side,
 		Type:      connector.OrderTypeMarket,
 		Quantity:  quantity,
-		Timestamp: time.Now(),
+		Timestamp: h.timeProvider.Now(),
 	}, nil
 }
 
@@ -90,7 +90,7 @@ func (h *hyperliquid) CancelOrder(symbol, orderID string) (*connector.CancelResp
 		OrderID:   orderID,
 		Symbol:    symbol,
 		Status:    connector.OrderStatusCanceled,
-		Timestamp: time.Now(),
+		Timestamp: h.timeProvider.Now(),
 	}, nil
 }
 

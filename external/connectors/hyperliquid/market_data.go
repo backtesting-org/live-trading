@@ -12,7 +12,7 @@ import (
 // FetchKlines retrieves historical candlestick data with decimal precision
 func (h *hyperliquid) FetchKlines(symbol, interval string, limit int) ([]connector.Kline, error) {
 	hlInterval := convertInterval(interval)
-	endTime := time.Now().Unix()
+	endTime := h.timeProvider.Now().Unix()
 	startTime := endTime - int64(limit*intervalToSeconds(hlInterval))
 
 	candles, err := h.marketData.GetCandles(symbol, hlInterval, startTime, endTime)
@@ -82,7 +82,7 @@ func (h *hyperliquid) FetchPrice(symbol string) (*connector.Price, error) {
 		Symbol:    symbol,
 		Price:     price,
 		Source:    "Hyperliquid",
-		Timestamp: time.Now(),
+		Timestamp: h.timeProvider.Now(),
 	}, nil
 }
 
@@ -102,7 +102,7 @@ func (h *hyperliquid) FetchOrderBook(symbol portfolio.Asset, instrument connecto
 
 	orderBook := &connector.OrderBook{
 		Asset:     symbol,
-		Timestamp: time.Now(),
+		Timestamp: h.timeProvider.Now(),
 		Bids:      make([]connector.PriceLevel, 0, depth),
 		Asks:      make([]connector.PriceLevel, 0, depth),
 	}

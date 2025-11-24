@@ -2,15 +2,15 @@ package hyperliquid
 
 import (
 	"fmt"
-	"github.com/shopspring/decimal"
 	"log"
-	"time"
+
+	"github.com/shopspring/decimal"
 )
 
 // extractOrderID extracts order ID from trading service response
-func extractOrderID(result interface{}) string {
+func (h *hyperliquid) extractOrderID(result interface{}) string {
 	// TODO: Implement based on actual trading service response structure
-	return fmt.Sprintf("%d", time.Now().UnixNano())
+	return fmt.Sprintf("%d", h.timeProvider.Now().UnixNano())
 }
 
 // convertInterval converts standard interval format to Hyperliquid format
