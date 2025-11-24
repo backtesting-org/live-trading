@@ -321,7 +321,7 @@ func (h *hyperliquid) UnsubscribeKlines(asset portfolio.Asset, interval string) 
 
 	h.subMu.Lock()
 	key := "klines:" + asset.Symbol() + ":" + interval
-	_, exists := h.subscriptions[key]
+	subID, exists := h.subscriptions[key]
 	if !exists {
 		h.subMu.Unlock()
 		return fmt.Errorf("no active subscription for %s", key)
@@ -329,5 +329,5 @@ func (h *hyperliquid) UnsubscribeKlines(asset portfolio.Asset, interval string) 
 	delete(h.subscriptions, key)
 	h.subMu.Unlock()
 
-	return fmt.Errorf("unsubscribe klines not available in SDK")
+	return h.realTime.UnsubscribeFromKlines(asset.Symbol(), interval, subID)
 }

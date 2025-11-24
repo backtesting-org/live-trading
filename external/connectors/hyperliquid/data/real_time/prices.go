@@ -56,3 +56,12 @@ func (r *realTimeService) UnsubscribeFromOrderBook(coin string, subscriptionID i
 	sub := hyperliquid.Subscription{Type: "l2Book", Coin: coin}
 	return ws.Unsubscribe(sub, subscriptionID)
 }
+
+func (r *realTimeService) UnsubscribeFromKlines(coin, interval string, subscriptionID int) error {
+	ws, err := r.client.GetWebSocket()
+	if err != nil {
+		return fmt.Errorf("websocket not configured: %w", err)
+	}
+	sub := hyperliquid.Subscription{Type: "candle", Coin: coin, Interval: interval}
+	return ws.Unsubscribe(sub, subscriptionID)
+}

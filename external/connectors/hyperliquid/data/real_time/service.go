@@ -26,6 +26,7 @@ type RealTimeService interface {
 	SubscribeToPositions(user string, callback func(*PositionMessage)) (int, error)
 	SubscribeToAccountBalance(user string, callback func(*AccountBalanceMessage)) (int, error)
 	SubscribeToKlines(coin, interval string, callback func(*KlineMessage)) (int, error)
+	UnsubscribeFromKlines(coin, interval string, subscriptionID int) error
 }
 
 type realTimeService struct {
