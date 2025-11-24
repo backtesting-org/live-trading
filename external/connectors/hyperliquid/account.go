@@ -1,0 +1,94 @@
+package hyperliquid
+
+import (
+	"fmt"
+
+	"github.com/backtesting-org/kronos-sdk/pkg/types/connector"
+	"github.com/backtesting-org/kronos-sdk/pkg/types/portfolio"
+	"github.com/shopspring/decimal"
+)
+
+func (h *hyperliquid) GetAccountBalance() (*connector.AccountBalance, error) {
+	userState, err := h.marketData.GetUserState(h.config.AccountAddress)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get user state: %w", err)
+	}
+
+	balance := &connector.AccountBalance{
+		TotalBalance:     parseDecimal(userState.MarginSummary.AccountValue),
+		AvailableBalance: parseDecimal(userState.Withdrawable),
+		UsedMargin:       parseDecimal(userState.MarginSummary.TotalMarginUsed),
+		UnrealizedPnL:    parseDecimal(userState.MarginSummary.TotalNtlPos),
+		Currency:         "USD",
+		UpdatedAt:        h.timeProvider.Now(),
+	}
+
+	return balance, nil
+}
+
+// GetPositions retrieves all positions from UserState and remaps them to connector.Position
+func (h *hyperliquid) GetPositions() ([]connector.Position, error) {
+	userState, err := h.marketData.GetUserState(h.config.AccountAddress)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get user state: %w", err)
+	}
+
+	if len(userState.AssetPositions) == 0 {
+		return []connector.Position{}, nil
+	}
+
+	var positions []connector.Position
+
+	for _, assetPos := range userState.AssetPositions {
+		pos := assetPos.Position
+
+		// Simple decimal conversion - defaults to zero on error
+		positionSize := parseDecimal(pos.Szi)
+		unrealizedPnL := parseDecimal(pos.UnrealizedPnl)
+		leverage := decimal.NewFromInt(int64(pos.Leverage.Value))
+
+		var entryPrice decimal.Decimal
+		if pos.EntryPx != nil {
+			entryPrice = parseDecimal(*pos.EntryPx)
+		}
+
+		var liquidationPrice decimal.Decimal
+		if pos.LiquidationPx != nil {
+			liquidationPrice = parseDecimal(*pos.LiquidationPx)
+		}
+
+		markPrice := parseDecimal(pos.PositionValue)
+
+		// Determine side based on position size
+		var side connector.OrderSide
+		if positionSize.IsPositive() {
+			side = connector.OrderSideBuy
+		} else if positionSize.IsNegative() {
+			side = connector.OrderSideSell
+		} else {
+			side = connector.OrderSideBuy
+		}
+
+		positions = append(positions, connector.Position{
+			Exchange:         connector.Hyperliquid,
+			Symbol:           portfolio.NewAsset(pos.Coin),
+			Side:             side,
+			Size:             positionSize.Abs(),
+			EntryPrice:       entryPrice,
+			MarkPrice:        markPrice,
+			UnrealizedPnL:    unrealizedPnL,
+			RealizedPnL:      decimal.Zero,
+			Leverage:         leverage,
+			MarginType:       pos.Leverage.Type,
+			LiquidationPrice: liquidationPrice,
+			UpdatedAt:        h.timeProvider.Now(),
+		})
+	}
+
+	return positions, nil
+}
+
+// GetTradingHistory retrieves trading history for the specified symbol
+func (h *hyperliquid) GetTradingHistory(symbol string, limit int) ([]connector.Trade, error) {
+	return nil, fmt.Errorf("GetTradingHistory not yet implemented for Hyperliquid")
+}

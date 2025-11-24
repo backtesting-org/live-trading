@@ -1,4 +1,3 @@
-### Example user template template
 ### Example user template
 
 # IntelliJ project files
@@ -16,6 +15,9 @@ gen
 *.dll
 *.so
 *.dylib
+
+.vscode
+docs
 
 # Test binary, built with `go test -c`
 *.test
@@ -45,6 +47,7 @@ logs/
 # Temporary files
 tmp/
 temp/
+
 
 # Config secrets
 config/*/local.yaml
