@@ -10,22 +10,25 @@ import (
 )
 
 func (h *hyperliquid) FetchCurrentFundingRates() (map[portfolio.Asset]connector.FundingRate, error) {
-	rawData, err := h.marketData.GetCurrentFundingRatesMap()
+	contexts, err := h.marketData.GetAllAssetContexts()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get asset contexts: %w", err)
 	}
 
 	fundingRates := make(map[portfolio.Asset]connector.FundingRate)
 
-	for symbol, data := range rawData {
-		asset := portfolio.NewAsset(symbol)
+	for _, ctx := range contexts {
+		asset := portfolio.NewAsset(ctx.Name)
+
+		funding, _ := decimal.NewFromString(ctx.Funding)
+		markPrice, _ := decimal.NewFromString(ctx.MarkPrice)
+		oraclePrice, _ := decimal.NewFromString(ctx.OraclePrice)
 
 		fundingRates[asset] = connector.FundingRate{
-			CurrentRate:     decimal.NewFromFloat(data["funding"]),
+			CurrentRate:     funding,
 			Timestamp:       time.Now(),
-			MarkPrice:       decimal.NewFromFloat(data["markPrice"]),
-			IndexPrice:      decimal.NewFromFloat(data["oraclePrice"]),
-			Premium:         decimal.NewFromFloat(data["premium"]),
+			MarkPrice:       markPrice,
+			IndexPrice:      oraclePrice,
 			NextFundingTime: time.Now().Add(time.Hour),
 		}
 	}
@@ -34,17 +37,22 @@ func (h *hyperliquid) FetchCurrentFundingRates() (map[portfolio.Asset]connector.
 }
 
 func (h *hyperliquid) FetchFundingRate(asset portfolio.Asset) (*connector.FundingRate, error) {
-	allRates, err := h.FetchCurrentFundingRates()
+	ctx, err := h.marketData.GetAssetContext(asset.Symbol())
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get asset context: %w", err)
 	}
 
-	rate, exists := allRates[asset]
-	if !exists {
-		return nil, fmt.Errorf("funding rate not found for symbol: %s", asset.Symbol())
-	}
+	funding, _ := decimal.NewFromString(ctx.Funding)
+	markPrice, _ := decimal.NewFromString(ctx.MarkPrice)
+	oraclePrice, _ := decimal.NewFromString(ctx.OraclePrice)
 
-	return &rate, nil
+	return &connector.FundingRate{
+		CurrentRate:     funding,
+		Timestamp:       time.Now(),
+		MarkPrice:       markPrice,
+		IndexPrice:      oraclePrice,
+		NextFundingTime: time.Now().Add(time.Hour),
+	}, nil
 }
 
 func (h *hyperliquid) FetchHistoricalFundingRates(symbol portfolio.Asset, startTime, endTime int64) ([]connector.HistoricalFundingRate, error) {

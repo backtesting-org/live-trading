@@ -22,6 +22,11 @@ type MarketDataService interface {
 	GetUserState(user string) (hyperliquid.UserState, error)
 	GetOpenOrders(user string) ([]hyperliquid.OpenOrder, error)
 	GetUserFills(user string) ([]hyperliquid.Fill, error)
+
+	// Funding rate methods - historical only
+	GetAssetContext(coin string) (*AssetContext, error)
+	GetAllAssetContexts() ([]AssetContext, error)
+	GetHistoricalFundingRates(coin string, startTime, endTime int64) ([]hyperliquid.FundingHistory, error)
 }
 
 // marketDataService implementation
