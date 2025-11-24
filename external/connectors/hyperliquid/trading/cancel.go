@@ -1,11 +1,23 @@
 package trading
 
-import "github.com/sonirico/go-hyperliquid"
+import (
+	"fmt"
 
-func (t *TradingService) CancelOrderByID(coin string, orderID int64) (*hyperliquid.APIResponse[hyperliquid.CancelResponse], error) {
-	return t.exchange.Cancel(coin, orderID)
+	"github.com/sonirico/go-hyperliquid"
+)
+
+func (t *tradingService) CancelOrderByID(coin string, orderID int64) (*hyperliquid.APIResponse[hyperliquid.CancelResponse], error) {
+	ex, err := t.client.GetExchange()
+	if err != nil {
+		return nil, fmt.Errorf("exchange not configured: %w", err)
+	}
+	return ex.Cancel(coin, orderID)
 }
 
-func (t *TradingService) CancelOrderByCustomRef(coin, customRef string) (*hyperliquid.APIResponse[hyperliquid.CancelResponse], error) {
-	return t.exchange.CancelByCloid(coin, customRef)
+func (t *tradingService) CancelOrderByCustomRef(coin, customRef string) (*hyperliquid.APIResponse[hyperliquid.CancelResponse], error) {
+	ex, err := t.client.GetExchange()
+	if err != nil {
+		return nil, fmt.Errorf("exchange not configured: %w", err)
+	}
+	return ex.CancelByCloid(coin, customRef)
 }

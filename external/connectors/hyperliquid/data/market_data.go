@@ -1,47 +1,100 @@
 package data
 
 import (
+	"fmt"
+
+	"github.com/backtesting-org/live-trading/external/connectors/hyperliquid/clients"
 	"github.com/sonirico/go-hyperliquid"
 )
 
-type MarketDataService struct {
-	info *hyperliquid.Info
+// MarketDataService interface for market data operations
+type MarketDataService interface {
+	GetAllMids() (map[string]string, error)
+	GetL2Book(coin string) (*hyperliquid.L2Book, error)
+	GetCandles(coin, interval string, startTime, endTime int64) ([]hyperliquid.Candle, error)
+	GetMeta() (*hyperliquid.Meta, error)
+	GetSpotMeta() (*hyperliquid.SpotMeta, error)
+	GetMetaAndAssetCtxs() (map[string]any, error)
+	GetSpotMetaAndAssetCtxs() (map[string]any, error)
+	NameToAsset(name string) int
+
+	// User data methods
+	GetUserState(user string) (hyperliquid.UserState, error)
+	GetOpenOrders(user string) ([]hyperliquid.OpenOrder, error)
+	GetUserFills(user string) ([]hyperliquid.Fill, error)
+}
+
+// marketDataService implementation
+type marketDataService struct {
+	client clients.InfoClient
 }
 
 var millisecondsPerSecond = int64(1000)
 
-func NewMarketDataService(info *hyperliquid.Info) *MarketDataService {
-	return &MarketDataService{info: info}
+func NewMarketDataService(client clients.InfoClient) MarketDataService {
+	return &marketDataService{client: client}
 }
 
-func (m *MarketDataService) GetAllMids() (map[string]string, error) {
-	return m.info.AllMids()
+func (m *marketDataService) GetAllMids() (map[string]string, error) {
+	info, err := m.client.GetInfo()
+	if err != nil {
+		return nil, fmt.Errorf("info client not configured: %w", err)
+	}
+	return info.AllMids()
 }
 
-func (m *MarketDataService) GetL2Book(coin string) (*hyperliquid.L2Book, error) {
-	return m.info.L2Snapshot(coin)
+func (m *marketDataService) GetL2Book(coin string) (*hyperliquid.L2Book, error) {
+	info, err := m.client.GetInfo()
+	if err != nil {
+		return nil, fmt.Errorf("info client not configured: %w", err)
+	}
+	return info.L2Snapshot(coin)
 }
 
-func (m *MarketDataService) GetCandles(coin, interval string, startTime, endTime int64) ([]hyperliquid.Candle, error) {
-	return m.info.CandlesSnapshot(coin, interval, startTime*millisecondsPerSecond, endTime*millisecondsPerSecond)
+func (m *marketDataService) GetCandles(coin, interval string, startTime, endTime int64) ([]hyperliquid.Candle, error) {
+	info, err := m.client.GetInfo()
+	if err != nil {
+		return nil, fmt.Errorf("info client not configured: %w", err)
+	}
+	return info.CandlesSnapshot(coin, interval, startTime*millisecondsPerSecond, endTime*millisecondsPerSecond)
 }
 
-func (m *MarketDataService) GetMeta() (*hyperliquid.Meta, error) {
-	return m.info.Meta()
+func (m *marketDataService) GetMeta() (*hyperliquid.Meta, error) {
+	info, err := m.client.GetInfo()
+	if err != nil {
+		return nil, fmt.Errorf("info client not configured: %w", err)
+	}
+	return info.Meta()
 }
 
-func (m *MarketDataService) GetSpotMeta() (*hyperliquid.SpotMeta, error) {
-	return m.info.SpotMeta()
+func (m *marketDataService) GetSpotMeta() (*hyperliquid.SpotMeta, error) {
+	info, err := m.client.GetInfo()
+	if err != nil {
+		return nil, fmt.Errorf("info client not configured: %w", err)
+	}
+	return info.SpotMeta()
 }
 
-func (m *MarketDataService) GetMetaAndAssetCtxs() (map[string]any, error) {
-	return m.info.MetaAndAssetCtxs()
+func (m *marketDataService) GetMetaAndAssetCtxs() (map[string]any, error) {
+	info, err := m.client.GetInfo()
+	if err != nil {
+		return nil, fmt.Errorf("info client not configured: %w", err)
+	}
+	return info.MetaAndAssetCtxs()
 }
 
-func (m *MarketDataService) GetSpotMetaAndAssetCtxs() (map[string]any, error) {
-	return m.info.SpotMetaAndAssetCtxs()
+func (m *marketDataService) GetSpotMetaAndAssetCtxs() (map[string]any, error) {
+	info, err := m.client.GetInfo()
+	if err != nil {
+		return nil, fmt.Errorf("info client not configured: %w", err)
+	}
+	return info.SpotMetaAndAssetCtxs()
 }
 
-func (m *MarketDataService) NameToAsset(name string) int {
-	return m.info.NameToAsset(name)
+func (m *marketDataService) NameToAsset(name string) int {
+	info, err := m.client.GetInfo()
+	if err != nil {
+		return -1 // Return -1 on error since this returns int
+	}
+	return info.NameToAsset(name)
 }

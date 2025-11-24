@@ -10,7 +10,7 @@ import (
 )
 
 // FetchKlines retrieves historical candlestick data with decimal precision
-func (h *Hyperliquid) FetchKlines(symbol, interval string, limit int) ([]connector.Kline, error) {
+func (h *hyperliquid) FetchKlines(symbol, interval string, limit int) ([]connector.Kline, error) {
 	hlInterval := convertInterval(interval)
 	endTime := time.Now().Unix()
 	startTime := endTime - int64(limit*intervalToSeconds(hlInterval))
@@ -62,7 +62,7 @@ func (h *Hyperliquid) FetchKlines(symbol, interval string, limit int) ([]connect
 }
 
 // FetchPrice retrieves current price with decimal precision
-func (h *Hyperliquid) FetchPrice(symbol string) (*connector.Price, error) {
+func (h *hyperliquid) FetchPrice(symbol string) (*connector.Price, error) {
 	mids, err := h.marketData.GetAllMids()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get current prices: %w", err)
@@ -87,7 +87,7 @@ func (h *Hyperliquid) FetchPrice(symbol string) (*connector.Price, error) {
 }
 
 // FetchOrderBook retrieves order book with decimal precision
-func (h *Hyperliquid) FetchOrderBook(symbol portfolio.Asset, instrument connector.Instrument, depth int) (*connector.OrderBook, error) {
+func (h *hyperliquid) FetchOrderBook(symbol portfolio.Asset, instrument connector.Instrument, depth int) (*connector.OrderBook, error) {
 	l2Book, err := h.marketData.GetL2Book(symbol.Symbol())
 
 	if instrument != connector.TypePerpetual {
@@ -144,22 +144,22 @@ func (h *Hyperliquid) FetchOrderBook(symbol portfolio.Asset, instrument connecto
 	return orderBook, nil
 }
 
-func (h *Hyperliquid) GetPerpSymbol(symbol portfolio.Asset) string {
+func (h *hyperliquid) GetPerpSymbol(symbol portfolio.Asset) string {
 	return symbol.Symbol() + "-USD"
 
 }
 
 // FetchRecentTrades retrieves recent trades for the specified symbol
-func (h *Hyperliquid) FetchRecentTrades(symbol string, limit int) ([]connector.Trade, error) {
+func (h *hyperliquid) FetchRecentTrades(symbol string, limit int) ([]connector.Trade, error) {
 	return nil, fmt.Errorf("FetchRecentTrades not yet implemented for Hyperliquid")
 }
 
 // FetchRiskFundBalance retrieves risk fund balance for the specified symbol
-func (h *Hyperliquid) FetchRiskFundBalance(symbol string) (*connector.RiskFundBalance, error) {
+func (h *hyperliquid) FetchRiskFundBalance(symbol string) (*connector.RiskFundBalance, error) {
 	return nil, fmt.Errorf("FetchRiskFundBalance not implemented for Hyperliquid")
 }
 
 // FetchContracts retrieves available contract information
-func (h *Hyperliquid) FetchContracts() ([]connector.ContractInfo, error) {
+func (h *hyperliquid) FetchContracts() ([]connector.ContractInfo, error) {
 	return nil, fmt.Errorf("FetchContracts not implemented for Hyperliquid")
 }

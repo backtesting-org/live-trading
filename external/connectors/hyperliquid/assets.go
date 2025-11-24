@@ -8,7 +8,7 @@ import (
 )
 
 // FetchAvailableSpotAssets fetches all available spot assets from Hyperliquid
-func (h *Hyperliquid) FetchAvailableSpotAssets() ([]portfolio.Asset, error) {
+func (h *hyperliquid) FetchAvailableSpotAssets() ([]portfolio.Asset, error) {
 	spotMeta, err := h.marketData.GetSpotMeta()
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch spot meta: %w", err)
@@ -26,7 +26,7 @@ func (h *Hyperliquid) FetchAvailableSpotAssets() ([]portfolio.Asset, error) {
 }
 
 // FetchAvailablePerpetualAssets fetches all available perpetual assets from Hyperliquid
-func (h *Hyperliquid) FetchAvailablePerpetualAssets() ([]portfolio.Asset, error) {
+func (h *hyperliquid) FetchAvailablePerpetualAssets() ([]portfolio.Asset, error) {
 	meta, err := h.marketData.GetMeta()
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch perpetual meta: %w", err)

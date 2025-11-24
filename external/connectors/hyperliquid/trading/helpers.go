@@ -1,12 +1,17 @@
 package trading
 
 import (
-	"context"
+	"fmt"
 
 	"github.com/sonirico/go-hyperliquid"
 )
 
-func (t *TradingService) placeLimitOrder(coin string, size, price float64, isBuy bool, clientOrderID *string) (hyperliquid.OrderStatus, error) {
+func (t *tradingService) placeLimitOrder(coin string, size, price float64, isBuy bool, clientOrderID *string) (hyperliquid.OrderStatus, error) {
+	ex, err := t.client.GetExchange()
+	if err != nil {
+		return hyperliquid.OrderStatus{}, fmt.Errorf("exchange not configured: %w", err)
+	}
+
 	req := hyperliquid.CreateOrderRequest{
 		Coin:       coin,
 		IsBuy:      isBuy,
@@ -19,10 +24,15 @@ func (t *TradingService) placeLimitOrder(coin string, size, price float64, isBuy
 		ClientOrderID: clientOrderID,
 	}
 
-	return t.exchange.Order(context.Background(), req, nil)
+	return ex.Order(req, nil)
 }
 
-func (t *TradingService) placeTriggerOrder(coin string, size, triggerPrice float64, isBuy bool, tpsl string, isMarket bool) (hyperliquid.OrderStatus, error) {
+func (t *tradingService) placeTriggerOrder(coin string, size, triggerPrice float64, isBuy bool, tpsl string, isMarket bool) (hyperliquid.OrderStatus, error) {
+	ex, err := t.client.GetExchange()
+	if err != nil {
+		return hyperliquid.OrderStatus{}, fmt.Errorf("exchange not configured: %w", err)
+	}
+
 	req := hyperliquid.CreateOrderRequest{
 		Coin:       coin,
 		IsBuy:      isBuy,
@@ -37,5 +47,5 @@ func (t *TradingService) placeTriggerOrder(coin string, size, triggerPrice float
 		},
 	}
 
-	return t.exchange.Order(context.Background(), req, nil)
+	return ex.Order(req, nil)
 }

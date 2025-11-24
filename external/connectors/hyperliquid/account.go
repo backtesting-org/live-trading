@@ -5,10 +5,11 @@ import (
 	"time"
 
 	"github.com/backtesting-org/kronos-sdk/pkg/types/connector"
+	"github.com/backtesting-org/kronos-sdk/pkg/types/portfolio"
 	"github.com/shopspring/decimal"
 )
 
-func (h *Hyperliquid) GetAccountBalance() (*connector.AccountBalance, error) {
+func (h *hyperliquid) GetAccountBalance() (*connector.AccountBalance, error) {
 	userState, err := h.marketData.GetUserState(h.config.AccountAddress)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get user state: %w", err)
@@ -27,7 +28,7 @@ func (h *Hyperliquid) GetAccountBalance() (*connector.AccountBalance, error) {
 }
 
 // GetPositions retrieves all positions from UserState and remaps them to connector.Position
-func (h *Hyperliquid) GetPositions() ([]connector.Position, error) {
+func (h *hyperliquid) GetPositions() ([]connector.Position, error) {
 	userState, err := h.marketData.GetUserState(h.config.AccountAddress)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get user state: %w", err)
@@ -70,8 +71,8 @@ func (h *Hyperliquid) GetPositions() ([]connector.Position, error) {
 		}
 
 		positions = append(positions, connector.Position{
-			Exchange:         models.Hyperliquid,
-			Symbol:           models.NewAsset(pos.Coin),
+			Exchange:         connector.Hyperliquid,
+			Symbol:           portfolio.NewAsset(pos.Coin),
 			Side:             side,
 			Size:             positionSize.Abs(),
 			EntryPrice:       entryPrice,
@@ -89,6 +90,6 @@ func (h *Hyperliquid) GetPositions() ([]connector.Position, error) {
 }
 
 // GetTradingHistory retrieves trading history for the specified symbol
-func (h *Hyperliquid) GetTradingHistory(symbol string, limit int) ([]connector.Trade, error) {
+func (h *hyperliquid) GetTradingHistory(symbol string, limit int) ([]connector.Trade, error) {
 	return nil, fmt.Errorf("GetTradingHistory not yet implemented for Hyperliquid")
 }

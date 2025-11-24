@@ -1,27 +1,31 @@
 package trading
 
 import (
-	"context"
+	"fmt"
 
 	"github.com/sonirico/go-hyperliquid"
 )
 
-func (t *TradingService) PlaceBuyLimitOrder(coin string, size, price float64) (hyperliquid.OrderStatus, error) {
+func (t *tradingService) PlaceBuyLimitOrder(coin string, size, price float64) (hyperliquid.OrderStatus, error) {
 	return t.placeLimitOrder(coin, size, price, true, nil)
 }
 
-func (t *TradingService) PlaceBuyMarketOrder(coin string, size, slippage float64) (hyperliquid.OrderStatus, error) {
-	return t.exchange.MarketOpen(context.Background(), coin, true, size, nil, slippage, nil, nil)
+func (t *tradingService) PlaceBuyMarketOrder(coin string, size, slippage float64) (hyperliquid.OrderStatus, error) {
+	ex, err := t.client.GetExchange()
+	if err != nil {
+		return hyperliquid.OrderStatus{}, fmt.Errorf("exchange not configured: %w", err)
+	}
+	return ex.MarketOpen(coin, true, size, nil, slippage, nil, nil)
 }
 
-func (t *TradingService) PlaceBuyStopLoss(coin string, size, triggerPrice float64) (hyperliquid.OrderStatus, error) {
+func (t *tradingService) PlaceBuyStopLoss(coin string, size, triggerPrice float64) (hyperliquid.OrderStatus, error) {
 	return t.placeTriggerOrder(coin, size, triggerPrice, true, "sl", true)
 }
 
-func (t *TradingService) PlaceBuyTakeProfit(coin string, size, triggerPrice float64) (hyperliquid.OrderStatus, error) {
+func (t *tradingService) PlaceBuyTakeProfit(coin string, size, triggerPrice float64) (hyperliquid.OrderStatus, error) {
 	return t.placeTriggerOrder(coin, size, triggerPrice, true, "tp", true)
 }
 
-func (t *TradingService) PlaceBuyLimitOrderWithCustomRef(coin string, size, price float64, customRef string) (hyperliquid.OrderStatus, error) {
+func (t *tradingService) PlaceBuyLimitOrderWithCustomRef(coin string, size, price float64, customRef string) (hyperliquid.OrderStatus, error) {
 	return t.placeLimitOrder(coin, size, price, true, &customRef)
 }

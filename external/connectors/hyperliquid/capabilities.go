@@ -6,31 +6,30 @@ import (
 )
 
 // SupportsTradingOperations returns whether trading operations are supported
-func (h *Hyperliquid) SupportsTradingOperations() bool {
+func (h *hyperliquid) SupportsTradingOperations() bool {
 	return h.trading != nil
 }
 
 // SupportsRealTimeData returns whether real-time data is supported
-func (h *Hyperliquid) SupportsRealTimeData() bool {
+func (h *hyperliquid) SupportsRealTimeData() bool {
 	return true
 }
 
 // SupportsHistoricalData returns whether historical data is supported
-func (h *Hyperliquid) SupportsHistoricalData() bool {
+func (h *hyperliquid) SupportsHistoricalData() bool {
 	return h.marketData != nil
 }
 
-func (h *Hyperliquid) SupportsPerpetuals() bool {
+func (h *hyperliquid) SupportsPerpetuals() bool {
 	return true
 }
 
-// turned off as their spot market is weird
-func (h *Hyperliquid) SupportsSpot() bool {
+func (h *hyperliquid) SupportsSpot() bool {
 	return false
 }
 
 // GetConnectorInfo returns metadata about the exchange
-func (h *Hyperliquid) GetConnectorInfo() *connector.Info {
+func (h *hyperliquid) GetConnectorInfo() *connector.Info {
 	return &connector.Info{
 		Name:             connector.Hyperliquid,
 		TradingEnabled:   h.SupportsTradingOperations(),

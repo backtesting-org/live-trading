@@ -10,7 +10,7 @@ import (
 )
 
 // PlaceLimitOrder places a limit order on Hyperliquid
-func (h *Hyperliquid) PlaceLimitOrder(symbol string, side connector.OrderSide, quantity, price decimal.Decimal) (*connector.OrderResponse, error) {
+func (h *hyperliquid) PlaceLimitOrder(symbol string, side connector.OrderSide, quantity, price decimal.Decimal) (*connector.OrderResponse, error) {
 	if !h.SupportsTradingOperations() {
 		return nil, fmt.Errorf("trading operations not supported")
 	}
@@ -41,7 +41,7 @@ func (h *Hyperliquid) PlaceLimitOrder(symbol string, side connector.OrderSide, q
 }
 
 // PlaceMarketOrder places a market order on Hyperliquid
-func (h *Hyperliquid) PlaceMarketOrder(symbol string, side connector.OrderSide, quantity decimal.Decimal) (*connector.OrderResponse, error) {
+func (h *hyperliquid) PlaceMarketOrder(symbol string, side connector.OrderSide, quantity decimal.Decimal) (*connector.OrderResponse, error) {
 	if !h.SupportsTradingOperations() {
 		return nil, fmt.Errorf("trading operations not supported")
 	}
@@ -72,7 +72,7 @@ func (h *Hyperliquid) PlaceMarketOrder(symbol string, side connector.OrderSide, 
 }
 
 // CancelOrder cancels an existing order on Hyperliquid
-func (h *Hyperliquid) CancelOrder(symbol, orderID string) (*connector.CancelResponse, error) {
+func (h *hyperliquid) CancelOrder(symbol, orderID string) (*connector.CancelResponse, error) {
 	if !h.SupportsTradingOperations() {
 		return nil, fmt.Errorf("trading operations not supported")
 	}
@@ -96,7 +96,7 @@ func (h *Hyperliquid) CancelOrder(symbol, orderID string) (*connector.CancelResp
 }
 
 // GetOpenOrders retrieves current open orders
-func (h *Hyperliquid) GetOpenOrders() ([]connector.Order, error) {
+func (h *hyperliquid) GetOpenOrders() ([]connector.Order, error) {
 	orders, err := h.marketData.GetOpenOrders(h.config.AccountAddress)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get open orders: %w", err)
@@ -119,6 +119,6 @@ func (h *Hyperliquid) GetOpenOrders() ([]connector.Order, error) {
 }
 
 // GetOrderStatus retrieves the status of a specific order
-func (h *Hyperliquid) GetOrderStatus(orderID string) (*connector.Order, error) {
+func (h *hyperliquid) GetOrderStatus(orderID string) (*connector.Order, error) {
 	return nil, fmt.Errorf("GetOrderStatus not yet implemented for Hyperliquid")
 }

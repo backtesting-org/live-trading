@@ -9,7 +9,7 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-func (h *Hyperliquid) FetchCurrentFundingRates() (map[portfolio.Asset]connector.FundingRate, error) {
+func (h *hyperliquid) FetchCurrentFundingRates() (map[portfolio.Asset]connector.FundingRate, error) {
 	rawData, err := h.marketData.GetCurrentFundingRatesMap()
 	if err != nil {
 		return nil, err
@@ -33,7 +33,7 @@ func (h *Hyperliquid) FetchCurrentFundingRates() (map[portfolio.Asset]connector.
 	return fundingRates, nil
 }
 
-func (h *Hyperliquid) FetchFundingRate(asset portfolio.Asset) (*connector.FundingRate, error) {
+func (h *hyperliquid) FetchFundingRate(asset portfolio.Asset) (*connector.FundingRate, error) {
 	allRates, err := h.FetchCurrentFundingRates()
 	if err != nil {
 		return nil, err
@@ -47,7 +47,7 @@ func (h *Hyperliquid) FetchFundingRate(asset portfolio.Asset) (*connector.Fundin
 	return &rate, nil
 }
 
-func (h *Hyperliquid) FetchHistoricalFundingRates(symbol portfolio.Asset, startTime, endTime int64) ([]connector.HistoricalFundingRate, error) {
+func (h *hyperliquid) FetchHistoricalFundingRates(symbol portfolio.Asset, startTime, endTime int64) ([]connector.HistoricalFundingRate, error) {
 	rawData, err := h.marketData.GetHistoricalFundingRates(symbol.Symbol(), startTime, endTime)
 	if err != nil {
 		return nil, err
@@ -70,6 +70,6 @@ func (h *Hyperliquid) FetchHistoricalFundingRates(symbol portfolio.Asset, startT
 	return rates, nil
 }
 
-func (h *Hyperliquid) SupportsFundingRates() bool {
+func (h *hyperliquid) SupportsFundingRates() bool {
 	return true
 }
