@@ -1,6 +1,8 @@
 package connectors
 
 import (
+	"github.com/backtesting-org/live-trading/external/connectors/bybit"
+	"github.com/backtesting-org/live-trading/external/connectors/hyperliquid"
 	"github.com/backtesting-org/live-trading/external/connectors/paradex"
 	"go.uber.org/fx"
 )
@@ -9,4 +11,6 @@ import (
 // Each connector module automatically registers itself via fx groups
 var Module = fx.Options(
 	paradex.Module,
+	hyperliquid.Module,
+	bybit.Module,
 )

@@ -10,6 +10,7 @@ var Module = fx.Module("exchange-configs",
 	fx.Provide(
 		NewParadexConfig,
 		NewHyperliquidConfig,
+		NewBybitConfig,
 		// Add more exchange configs here as needed
 	),
 )
@@ -47,5 +48,23 @@ func NewHyperliquidConfig(logger *zap.Logger) (*HyperliquidConfig, error) {
 	}()
 
 	cfg.LoadHyperliquidConfig()
+	return cfg, nil
+}
+
+// NewBybitConfig loads Bybit configuration
+func NewBybitConfig(logger *zap.Logger) (*BybitConfig, error) {
+	logger.Info("Loading Bybit configuration...")
+	cfg := &BybitConfig{}
+
+	// Try to load config, but don't fail if credentials are missing
+	// This allows the server to start even without Bybit credentials
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Warn("Bybit configuration incomplete - trading will be disabled until credentials are provided",
+				zap.Any("error", r))
+		}
+	}()
+
+	cfg.LoadBybitConfig()
 	return cfg, nil
 }
