@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strconv"
 	"sync"
+	"time"
 
 	"github.com/backtesting-org/kronos-sdk/pkg/types/connector"
 	"github.com/backtesting-org/kronos-sdk/pkg/types/portfolio"
@@ -103,8 +104,9 @@ func (m *marketDataService) parseKline(data []interface{}) connector.Kline {
 
 	if len(data) >= 7 {
 		if openTimeStr, ok := data[0].(string); ok {
-			if _, err := strconv.ParseInt(openTimeStr, 10, 64); err == nil {
-				kline.OpenTime = m.timeProvider.Now()
+			if timestamp, err := strconv.ParseInt(openTimeStr, 10, 64); err == nil {
+				// Bybit returns timestamp in milliseconds
+				kline.OpenTime = time.Unix(timestamp/1000, (timestamp%1000)*1000000)
 			}
 		}
 		if open, ok := data[1].(string); ok {
@@ -501,9 +503,9 @@ func (m *marketDataService) FetchHistoricalFundingRates(symbol string, startTime
 						}
 
 						if fundingTimeStr, ok := fundingData["fundingRateTimestamp"].(string); ok {
-							if _, err := strconv.ParseInt(fundingTimeStr, 10, 64); err == nil {
+							if timestamp, err := strconv.ParseInt(fundingTimeStr, 10, 64); err == nil {
 								// Bybit returns timestamp in milliseconds
-								rate.Timestamp = m.timeProvider.Now()
+								rate.Timestamp = time.Unix(timestamp/1000, (timestamp%1000)*1000000)
 							}
 						}
 
