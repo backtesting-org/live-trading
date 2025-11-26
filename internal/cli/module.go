@@ -5,6 +5,8 @@ import (
 	"os"
 
 	"github.com/backtesting-org/kronos-sdk/pkg/types/connector"
+	"github.com/backtesting-org/kronos-sdk/pkg/types/logging"
+	"github.com/backtesting-org/kronos-sdk/pkg/types/plugin"
 	"github.com/backtesting-org/kronos-sdk/pkg/types/registry"
 	"github.com/backtesting-org/live-trading/internal/cli/arguments"
 	"github.com/backtesting-org/live-trading/internal/cli/handlers"
@@ -100,8 +102,14 @@ Examples:
 }
 
 // ExecuteStrategy runs the trading strategy with fx dependencies
-func ExecuteStrategy(cliArgs *CLIArgs, registry registry.ConnectorRegistry, argRegistry *arguments.Registry) error {
-	fmt.Printf("Running strategy: %s on exchange: %s\n", cliArgs.StrategyPath, cliArgs.Exchange)
+func ExecuteStrategy(
+	cliArgs *CLIArgs,
+	registry registry.ConnectorRegistry,
+	argRegistry *arguments.Registry,
+	pluginManager plugin.Manager,
+	logger logging.ApplicationLogger,
+) error {
+	logger.Info("Starting strategy execution", "strategyPath", cliArgs.StrategyPath)
 
 	// Recreate cobra command to parse exchange-specific flags
 	cmd := &cobra.Command{Use: "run"}
@@ -146,11 +154,12 @@ func ExecuteStrategy(cliArgs *CLIArgs, registry registry.ConnectorRegistry, argR
 		return fmt.Errorf("failed to get connector: %w", err)
 	}
 
-	fmt.Printf("Successfully got connector: %T\n", conn)
+	logger.Info("Connecting to exchange", "exchange", exchangeName)
 
 	// Initialize connector with config
 	initConn, ok := conn.(pkgconnector.Initializable)
 	if !ok {
+		logger.Error(fmt.Sprintf("Connector %s does not support initialization", cliArgs.Exchange))
 		return fmt.Errorf("connector %s does not support initialization", cliArgs.Exchange)
 	}
 
@@ -158,7 +167,15 @@ func ExecuteStrategy(cliArgs *CLIArgs, registry registry.ConnectorRegistry, argR
 		return fmt.Errorf("failed to initialize connector: %w", err)
 	}
 
-	fmt.Printf("Connector initialized successfully\n")
+	logger.Info("Successfully connected to exchange", "exchange", exchangeName)
 
-	return fmt.Errorf("implementation incomplete - need kronos initialization and plugin loading")
+	loadPlugin, err := pluginManager.LoadStrategyPlugin(cliArgs.StrategyPath)
+	if err != nil {
+		logger.Error(fmt.Sprintf("Failed to load plugin: %s", err))
+		return err
+	}
+
+	logger.Info("Successfully loaded strategy plugin", "strategy", loadPlugin.GetName())
+
+	return nil
 }
