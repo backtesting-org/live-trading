@@ -19,10 +19,16 @@ var Module = fx.Options(
 		trading.NewTradingService,
 		data.NewMarketDataService,
 		real_time.NewRealTimeService,
-		NewHyperliquid,
+		fx.Annotate(
+			NewHyperliquid,
+			fx.ResultTags(`name:"hyperliquid"`),
+		),
 	),
 	// Automatically register hyperliquid with the SDK registry at startup
-	fx.Invoke(registerHyperliquid),
+	fx.Invoke(fx.Annotate(
+		registerHyperliquid,
+		fx.ParamTags(`name:"hyperliquid"`),
+	)),
 )
 
 // registerHyperliquid registers the hyperliquid connector with the SDK's ConnectorRegistry

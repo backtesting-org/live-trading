@@ -23,6 +23,7 @@ func NewRegistry() *Registry {
 	}
 	r.Register(NewParadexArguments())
 	r.Register(NewHyperliquidArguments())
+	r.Register(NewBybitArguments())
 	return r
 }
 

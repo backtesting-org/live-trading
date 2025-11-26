@@ -15,9 +15,15 @@ var Module = fx.Options(
 		trading.NewTradingService,
 		data.NewMarketDataService,
 		real_time.NewRealTimeService,
-		NewBybit,
+		fx.Annotate(
+			NewBybit,
+			fx.ResultTags(`name:"bybit"`),
+		),
 	),
-	fx.Invoke(registerBybit),
+	fx.Invoke(fx.Annotate(
+		registerBybit,
+		fx.ParamTags(`name:"bybit"`),
+	)),
 )
 
 func registerBybit(bybitConn pkgconnector.Initializable, reg registry.ConnectorRegistry) {

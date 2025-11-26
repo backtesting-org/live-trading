@@ -134,6 +134,8 @@ func ExecuteStrategy(cliArgs *CLIArgs, registry registry.ConnectorRegistry, argR
 		exchangeName = connector.Paradex
 	case "bybit":
 		exchangeName = connector.Bybit
+	case "hyperliquid":
+		exchangeName = connector.Hyperliquid
 	default:
 		return fmt.Errorf("unsupported exchange: %s", cliArgs.Exchange)
 	}
@@ -157,10 +159,6 @@ func ExecuteStrategy(cliArgs *CLIArgs, registry registry.ConnectorRegistry, argR
 	}
 
 	fmt.Printf("Connector initialized successfully\n")
-
-	// TODO: Initialize Kronos SDK
-	// TODO: Load plugin
-	// TODO: Run strategy
 
 	return fmt.Errorf("implementation incomplete - need kronos initialization and plugin loading")
 }
