@@ -81,8 +81,8 @@ Examples:
 			if i+1 < len(os.Args) {
 				exchange := os.Args[i+1]
 				// Add exchange-specific flags for help
-				registry := arguments.NewRegistry()
-				if handler, err := registry.GetHandler(exchange); err == nil {
+				argRegistry := arguments.NewRegistry()
+				if handler, err := argRegistry.GetHandler(exchange); err == nil {
 					handler.RegisterFlags(runCmd)
 				}
 				break
@@ -91,10 +91,11 @@ Examples:
 	}
 
 	rootCmd.AddCommand(runCmd)
+	rootCmd.AddCommand(CreateMetadataCommand())
 
 	// Execute cobra - will return early if --help is used
 	if err := rootCmd.Execute(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		_, _ = fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
 

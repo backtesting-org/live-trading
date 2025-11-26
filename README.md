@@ -14,7 +14,23 @@ A live trading platform that supports automated trading strategies with real-tim
 ## Supported Exchanges
 
 - ✅ **Paradex** - Perpetual futures on Starknet
-- 🔜 **Bybit** - Coming soon
+- ✅ **Hyperliquid** - Decentralized perpetual DEX
+- ✅ **Bybit** - Centralized crypto derivatives exchange
+
+### Discover Available Exchanges
+
+List all supported exchanges and their configuration requirements:
+
+```bash
+# Human-readable format
+make build-cli
+./bin/kronos-live list-exchanges
+
+# JSON format (for programmatic use)
+./bin/kronos-live list-exchanges --json
+```
+
+See [Exchange Metadata Documentation](docs/EXCHANGE_METADATA.md) for details on the metadata system.
 
 ## Prerequisites
 
@@ -125,6 +141,58 @@ GET    /api/v1/strategies/:runId/stats    # Get strategy statistics
 ```
 WS /ws
 ```
+
+## CLI Usage
+
+The `kronos-live` CLI allows you to run trading strategies directly from the command line without needing the API server.
+
+### Build the CLI
+
+```bash
+make build-cli
+```
+
+### List Available Exchanges
+
+```bash
+# Human-readable format
+./bin/kronos-live list-exchanges
+
+# JSON format (for automation)
+./bin/kronos-live list-exchanges --json
+```
+
+### Run a Strategy
+
+```bash
+# General syntax
+./bin/kronos-live run --exchange <exchange> --strategy <path-to-plugin.so> [exchange-specific-flags]
+
+# Example: Run with Hyperliquid
+./bin/kronos-live run \
+  --exchange hyperliquid \
+  --strategy ./plugins/my-strategy.so \
+  --hyperliquid-account-address 0x... \
+  --hyperliquid-private-key 0x... \
+  --hyperliquid-use-testnet false
+
+# Example: Run with Bybit
+./bin/kronos-live run \
+  --exchange bybit \
+  --strategy ./plugins/my-strategy.so \
+  --bybit-api-key your-api-key \
+  --bybit-api-secret your-api-secret \
+  --bybit-is-testnet true
+```
+
+### Get Help for Specific Exchange
+
+```bash
+# See all available flags for an exchange
+./bin/kronos-live run --exchange hyperliquid --help
+```
+
+See [Exchange Metadata Documentation](docs/EXCHANGE_METADATA.md) for more details on CLI integration.
 
 ## Development
 

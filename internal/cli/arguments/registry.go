@@ -11,6 +11,7 @@ type ArgumentHandler interface {
 	RegisterFlags(cmd *cobra.Command)
 	ParseConfig(cmd *cobra.Command) (connector.Config, error)
 	ExchangeName() string
+	Metadata() *ExchangeMetadata
 }
 
 type Registry struct {
@@ -43,4 +44,22 @@ func (r *Registry) RegisterAllFlags(cmd *cobra.Command) {
 	for _, handler := range r.handlers {
 		handler.RegisterFlags(cmd)
 	}
+}
+
+// GetAllMetadata returns metadata for all registered exchanges
+func (r *Registry) GetAllMetadata() []*ExchangeMetadata {
+	metadata := make([]*ExchangeMetadata, 0, len(r.handlers))
+	for _, handler := range r.handlers {
+		metadata = append(metadata, handler.Metadata())
+	}
+	return metadata
+}
+
+// GetExchangeNames returns a list of all registered exchange names
+func (r *Registry) GetExchangeNames() []string {
+	names := make([]string, 0, len(r.handlers))
+	for name := range r.handlers {
+		names = append(names, name)
+	}
+	return names
 }
