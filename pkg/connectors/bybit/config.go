@@ -8,11 +8,11 @@ import (
 
 // Config holds the configuration for the Bybit connector
 type Config struct {
-	APIKey          string
-	APISecret       string
-	BaseURL         string
-	IsTestnet       bool
-	DefaultSlippage float64 // Default 0.005 (0.5%)
+	APIKey          string  `json:"api_key"`
+	APISecret       string  `json:"api_secret"`
+	BaseURL         string  `json:"base_url,omitempty"`
+	IsTestnet       bool    `json:"is_testnet,omitempty"`
+	DefaultSlippage float64 `json:"default_slippage,omitempty"` // Default 0.005 (0.5%)
 }
 
 var _ connector.Config = (*Config)(nil)
@@ -24,20 +24,15 @@ func (c *Config) ExchangeName() string {
 // Validate checks if the configuration is valid
 func (c *Config) Validate() error {
 	if c.APIKey == "" {
-		return fmt.Errorf("API key is required")
+		return fmt.Errorf("api_key is required")
 	}
 	if c.APISecret == "" {
-		return fmt.Errorf("API secret is required")
+		return fmt.Errorf("api_secret is required")
 	}
 
 	// Set default slippage if not provided
 	if c.DefaultSlippage == 0 {
 		c.DefaultSlippage = 0.005
-	}
-
-	// Validate slippage range
-	if c.DefaultSlippage < 0 || c.DefaultSlippage > 0.1 {
-		return fmt.Errorf("default slippage must be between 0 and 0.1")
 	}
 
 	// Set base URL based on testnet flag if not explicitly provided
