@@ -1,8 +1,8 @@
 package arguments
 
 import (
-	"github.com/backtesting-org/live-trading/external/connectors/hyperliquid"
 	"github.com/backtesting-org/live-trading/pkg/connector"
+	"github.com/backtesting-org/live-trading/pkg/connectors/hyperliquid"
 	"github.com/spf13/cobra"
 )
 

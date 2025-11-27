@@ -1,8 +1,8 @@
 package arguments
 
 import (
-	"github.com/backtesting-org/live-trading/external/connectors/paradex"
 	"github.com/backtesting-org/live-trading/pkg/connector"
+	"github.com/backtesting-org/live-trading/pkg/connectors/paradex"
 	"github.com/spf13/cobra"
 )
 
