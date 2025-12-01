@@ -61,6 +61,10 @@ func (r *startup) Start(
 		}
 
 		bootConfig.ConnectorNames = append(bootConfig.ConnectorNames, name)
+		err = r.registry.MarkConnectorReady(name)
+		if err != nil {
+			return err
+		}
 	}
 
 	err := r.runtime.Boot(ctx, bootConfig)
