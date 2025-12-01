@@ -1,4 +1,4 @@
-package runtime
+package startup
 
 import (
 	"go.uber.org/fx"
@@ -6,6 +6,6 @@ import (
 
 var Module = fx.Options(
 	fx.Provide(
-		NewRuntime,
+		NewStartup,
 	),
 )

@@ -5,6 +5,7 @@ import (
 
 	"github.com/backtesting-org/kronos-sdk/pkg/types/connector"
 	"github.com/backtesting-org/kronos-sdk/pkg/types/portfolio"
+	"github.com/backtesting-org/live-trading/pkg/connectors/types"
 	"github.com/shopspring/decimal"
 )
 
@@ -70,7 +71,7 @@ func (h *hyperliquid) GetPositions() ([]connector.Position, error) {
 		}
 
 		positions = append(positions, connector.Position{
-			Exchange:         connector.Hyperliquid,
+			Exchange:         types.Hyperliquid,
 			Symbol:           portfolio.NewAsset(pos.Coin),
 			Side:             side,
 			Size:             positionSize.Abs(),

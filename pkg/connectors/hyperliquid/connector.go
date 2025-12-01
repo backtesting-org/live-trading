@@ -12,8 +12,6 @@ import (
 	"github.com/backtesting-org/live-trading/pkg/connectors/hyperliquid/data"
 	"github.com/backtesting-org/live-trading/pkg/connectors/hyperliquid/data/real_time"
 	"github.com/backtesting-org/live-trading/pkg/connectors/hyperliquid/trading"
-
-	liveconnector "github.com/backtesting-org/live-trading/pkg/connector"
 )
 
 // hyperliquid implements Connector and Initializable interfaces
@@ -47,9 +45,8 @@ type hyperliquid struct {
 // Ensure hyperliquid implements all interfaces at compile time
 var _ connector.Connector = (*hyperliquid)(nil)
 var _ connector.WebSocketConnector = (*hyperliquid)(nil)
-var _ liveconnector.Initializable = (*hyperliquid)(nil)
 
-// NewHyperliquid creates a new Hyperliquid connector (not yet initialized)
+// NewHyperliquid creates a new Hyperliquid connector
 func NewHyperliquid(
 	exchangeClient clients.ExchangeClient,
 	infoClient clients.InfoClient,
@@ -60,7 +57,7 @@ func NewHyperliquid(
 	appLogger logging.ApplicationLogger,
 	tradingLogger logging.TradingLogger,
 	timeProvider temporal.TimeProvider,
-) liveconnector.Initializable {
+) connector.Connector {
 	return &hyperliquid{
 		exchangeClient: exchangeClient,
 		infoClient:     infoClient,
@@ -85,7 +82,7 @@ func NewHyperliquid(
 }
 
 // Initialize implements Initializable interface
-func (h *hyperliquid) Initialize(config liveconnector.Config) error {
+func (h *hyperliquid) Initialize(config connector.Config) error {
 	if h.initialized {
 		return fmt.Errorf("connector already initialized")
 	}
@@ -117,11 +114,4 @@ func (h *hyperliquid) Initialize(config liveconnector.Config) error {
 // IsInitialized implements Initializable interface
 func (h *hyperliquid) IsInitialized() bool {
 	return h.initialized
-}
-
-// Reset implements connector.Connector interface
-// For live exchanges, reset is a no-op since they don't maintain simulated state
-func (h *hyperliquid) Reset() error {
-	// Live exchanges don't maintain internal simulation state to reset
-	return nil
 }

@@ -7,6 +7,7 @@ import (
 	"github.com/backtesting-org/kronos-sdk/pkg/types/connector"
 	"github.com/backtesting-org/kronos-sdk/pkg/types/portfolio"
 	"github.com/backtesting-org/live-trading/pkg/connectors/hyperliquid/data/real_time"
+	"github.com/backtesting-org/live-trading/pkg/connectors/types"
 )
 
 // StartWebSocket starts the WebSocket connection for real-time data
@@ -136,7 +137,7 @@ func (h *hyperliquid) SubscribeTrades(asset portfolio.Asset, instrumentType conn
 			select {
 			case h.tradeCh <- connector.Trade{
 				Symbol:    trade.Coin,
-				Exchange:  connector.Hyperliquid,
+				Exchange:  types.Hyperliquid,
 				Price:     trade.Price,
 				Quantity:  trade.Quantity,
 				Side:      connector.FromString(trade.Side),
@@ -193,7 +194,7 @@ func (h *hyperliquid) SubscribePositions(asset portfolio.Asset, instrumentType c
 		select {
 		case h.positionCh <- connector.Position{
 			Symbol:        asset,
-			Exchange:      connector.Hyperliquid,
+			Exchange:      types.Hyperliquid,
 			Side:          side,
 			Size:          posMsg.Size.Abs(),
 			EntryPrice:    posMsg.EntryPrice,

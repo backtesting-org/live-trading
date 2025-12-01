@@ -6,6 +6,7 @@ import (
 
 	"github.com/backtesting-org/kronos-sdk/pkg/types/connector"
 	"github.com/backtesting-org/kronos-sdk/pkg/types/portfolio"
+	"github.com/backtesting-org/live-trading/pkg/connectors/types"
 	"github.com/shopspring/decimal"
 )
 
@@ -190,7 +191,7 @@ func (h *hyperliquid) FetchRecentTrades(symbol string, limit int) ([]connector.T
 		trades = append(trades, connector.Trade{
 			ID:        fmt.Sprintf("%d", fill.Oid),
 			Symbol:    fill.Coin,
-			Exchange:  connector.Hyperliquid,
+			Exchange:  types.Hyperliquid,
 			Price:     price,
 			Quantity:  quantity,
 			Side:      connector.FromString(fill.Side),

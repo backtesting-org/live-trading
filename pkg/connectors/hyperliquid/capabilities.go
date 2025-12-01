@@ -2,6 +2,7 @@ package hyperliquid
 
 import (
 	"github.com/backtesting-org/kronos-sdk/pkg/types/connector"
+	"github.com/backtesting-org/live-trading/pkg/connectors/types"
 	"github.com/shopspring/decimal"
 )
 
@@ -31,7 +32,7 @@ func (h *hyperliquid) SupportsSpot() bool {
 // GetConnectorInfo returns metadata about the exchange
 func (h *hyperliquid) GetConnectorInfo() *connector.Info {
 	return &connector.Info{
-		Name:             connector.Hyperliquid,
+		Name:             types.Hyperliquid,
 		TradingEnabled:   h.SupportsTradingOperations(),
 		WebSocketEnabled: true,
 		MaxLeverage:      decimal.NewFromFloat(50.0),

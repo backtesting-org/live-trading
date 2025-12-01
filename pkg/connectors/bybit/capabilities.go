@@ -2,6 +2,7 @@ package bybit
 
 import (
 	"github.com/backtesting-org/kronos-sdk/pkg/types/connector"
+	"github.com/backtesting-org/live-trading/pkg/connectors/types"
 	"github.com/shopspring/decimal"
 )
 
@@ -31,7 +32,7 @@ func (b *bybit) SupportsSpot() bool {
 // GetConnectorInfo returns metadata about the exchange
 func (b *bybit) GetConnectorInfo() *connector.Info {
 	return &connector.Info{
-		Name:             connector.Bybit,
+		Name:             types.Bybit,
 		TradingEnabled:   b.SupportsTradingOperations(),
 		WebSocketEnabled: true,
 		MaxLeverage:      decimal.NewFromFloat(125.0),

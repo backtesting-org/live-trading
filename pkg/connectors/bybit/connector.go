@@ -12,8 +12,6 @@ import (
 	"github.com/backtesting-org/live-trading/pkg/connectors/bybit/data"
 	"github.com/backtesting-org/live-trading/pkg/connectors/bybit/data/real_time"
 	"github.com/backtesting-org/live-trading/pkg/connectors/bybit/trading"
-
-	liveconnector "github.com/backtesting-org/live-trading/pkg/connector"
 )
 
 type bybit struct {
@@ -42,7 +40,6 @@ type bybit struct {
 
 var _ connector.Connector = (*bybit)(nil)
 var _ connector.WebSocketConnector = (*bybit)(nil)
-var _ liveconnector.Initializable = (*bybit)(nil)
 
 func NewBybit(
 	tradingService trading.TradingService,
@@ -51,7 +48,7 @@ func NewBybit(
 	appLogger logging.ApplicationLogger,
 	tradingLogger logging.TradingLogger,
 	timeProvider temporal.TimeProvider,
-) liveconnector.Initializable {
+) connector.Connector {
 	return &bybit{
 		trading:       tradingService,
 		marketData:    marketDataService,
@@ -72,7 +69,7 @@ func NewBybit(
 	}
 }
 
-func (b *bybit) Initialize(config liveconnector.Config) error {
+func (b *bybit) Initialize(config connector.Config) error {
 	if b.initialized {
 		return fmt.Errorf("connector already initialized")
 	}
@@ -119,12 +116,6 @@ func (b *bybit) Initialize(config liveconnector.Config) error {
 	b.config = bybitConfig
 	b.initialized = true
 	b.appLogger.Info("Bybit connector initialized", "testnet", bybitConfig.IsTestnet)
-	return nil
-}
-
-// Reset implements connector.Connector interface
-// For live exchanges, reset is a no-op since they don't maintain simulated state
-func (b *bybit) Reset() error {
 	return nil
 }
 

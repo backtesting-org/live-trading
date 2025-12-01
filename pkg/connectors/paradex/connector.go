@@ -11,8 +11,6 @@ import (
 	"github.com/backtesting-org/live-trading/pkg/connectors/paradex/adaptor"
 	"github.com/backtesting-org/live-trading/pkg/connectors/paradex/requests"
 	websockets2 "github.com/backtesting-org/live-trading/pkg/connectors/paradex/websocket"
-
-	liveconnector "github.com/backtesting-org/live-trading/pkg/connector"
 )
 
 // paradex implements Connector, WebSocketConnector, and Initializable interfaces
@@ -34,23 +32,15 @@ type paradex struct {
 	wsMutex   sync.RWMutex
 }
 
-// Reset implements connector.Connector interface
-// For live exchanges, reset is a no-op since they don't maintain simulated state
-func (p *paradex) Reset() error {
-	// Live exchanges don't maintain internal simulation state to reset
-	return nil
-}
-
 // Ensure paradex implements all interfaces at compile time
 var _ connector.Connector = (*paradex)(nil)
 var _ connector.WebSocketConnector = (*paradex)(nil)
-var _ liveconnector.Initializable = (*paradex)(nil)
 
 func NewParadex(
 	appLogger logging.ApplicationLogger,
 	tradingLogger logging.TradingLogger,
 	timeProvider temporal.TimeProvider,
-) liveconnector.Initializable {
+) connector.Connector {
 	return &paradex{
 		paradexService: nil, // Will be created during initialization
 		wsService:      nil, // Will be created during initialization
@@ -64,7 +54,7 @@ func NewParadex(
 }
 
 // Initialize implements Initializable interface
-func (p *paradex) Initialize(config liveconnector.Config) error {
+func (p *paradex) Initialize(config connector.Config) error {
 	if p.initialized {
 		return fmt.Errorf("connector already initialized")
 	}

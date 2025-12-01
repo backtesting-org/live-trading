@@ -3,7 +3,8 @@ package paradex
 import (
 	"fmt"
 
-	"github.com/backtesting-org/live-trading/pkg/connector"
+	"github.com/backtesting-org/kronos-sdk/pkg/types/connector"
+	"github.com/backtesting-org/live-trading/pkg/connectors/types"
 )
 
 type Config struct {
@@ -62,6 +63,6 @@ func (c *Config) Validate() error {
 	return nil
 }
 
-func (c *Config) ExchangeName() string {
-	return "paradex"
+func (c *Config) ExchangeName() connector.ExchangeName {
+	return types.Paradex
 }

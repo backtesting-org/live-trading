@@ -3,7 +3,8 @@ package bybit
 import (
 	"fmt"
 
-	"github.com/backtesting-org/live-trading/pkg/connector"
+	"github.com/backtesting-org/kronos-sdk/pkg/types/connector"
+	"github.com/backtesting-org/live-trading/pkg/connectors/types"
 )
 
 // Config holds the configuration for the Bybit connector
@@ -17,8 +18,8 @@ type Config struct {
 
 var _ connector.Config = (*Config)(nil)
 
-func (c *Config) ExchangeName() string {
-	return "bybit"
+func (c *Config) ExchangeName() connector.ExchangeName {
+	return types.Bybit
 }
 
 // Validate checks if the configuration is valid

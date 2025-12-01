@@ -3,7 +3,8 @@ package hyperliquid
 import (
 	"fmt"
 
-	"github.com/backtesting-org/live-trading/pkg/connector"
+	"github.com/backtesting-org/kronos-sdk/pkg/types/connector"
+	"github.com/backtesting-org/live-trading/pkg/connectors/types"
 )
 
 type Config struct {
@@ -17,8 +18,8 @@ type Config struct {
 
 var _ connector.Config = (*Config)(nil)
 
-func (c *Config) ExchangeName() string {
-	return "hyperliquid"
+func (c *Config) ExchangeName() connector.ExchangeName {
+	return types.Hyperliquid
 }
 
 func (c *Config) Validate() error {

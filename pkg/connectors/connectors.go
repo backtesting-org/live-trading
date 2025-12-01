@@ -1,29 +1,26 @@
 package connectors
 
 import (
+	"strings"
+
 	"github.com/backtesting-org/kronos-sdk/pkg/types/connector"
-	localConnector "github.com/backtesting-org/live-trading/pkg/connector"
 	"github.com/backtesting-org/live-trading/pkg/connectors/bybit"
 	"github.com/backtesting-org/live-trading/pkg/connectors/hyperliquid"
 	"github.com/backtesting-org/live-trading/pkg/connectors/paradex"
+	"github.com/backtesting-org/live-trading/pkg/connectors/types"
 )
 
-// ConnectorInfo contains metadata about an available connector
-type ConnectorInfo struct {
-	ExchangeName  connector.ExchangeName
-	ConfigExample localConnector.Config
-}
-
 // AvailableConnectors is a map of all available exchange connectors with their config types
-var AvailableConnectors = map[connector.ExchangeName]localConnector.Config{
-	connector.Paradex:     &paradex.Config{},
-	connector.Hyperliquid: &hyperliquid.Config{},
-	connector.Bybit:       &bybit.Config{},
+var AvailableConnectors = map[connector.ExchangeName]connector.Config{
+	types.Paradex:     &paradex.Config{},
+	types.Hyperliquid: &hyperliquid.Config{},
+	types.Bybit:       &bybit.Config{},
 }
 
 // IsAvailable checks if a connector is available for the given exchange
 func IsAvailable(exchange connector.ExchangeName) bool {
-	_, exists := AvailableConnectors[exchange]
+	normalizedExchange := connector.ExchangeName(strings.ToLower(string(exchange)))
+	_, exists := AvailableConnectors[normalizedExchange]
 	return exists
 }
 
@@ -37,6 +34,6 @@ func ListAvailable() []connector.ExchangeName {
 }
 
 // GetConfigType returns the config type for a given exchange
-func GetConfigType(exchange connector.ExchangeName) localConnector.Config {
+func GetConfigType(exchange connector.ExchangeName) connector.Config {
 	return AvailableConnectors[exchange]
 }

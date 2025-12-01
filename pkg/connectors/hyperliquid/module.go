@@ -3,11 +3,11 @@ package hyperliquid
 import (
 	"github.com/backtesting-org/kronos-sdk/pkg/types/connector"
 	"github.com/backtesting-org/kronos-sdk/pkg/types/registry"
-	pkgconnector "github.com/backtesting-org/live-trading/pkg/connector"
 	"github.com/backtesting-org/live-trading/pkg/connectors/hyperliquid/clients"
 	"github.com/backtesting-org/live-trading/pkg/connectors/hyperliquid/data"
 	"github.com/backtesting-org/live-trading/pkg/connectors/hyperliquid/data/real_time"
 	"github.com/backtesting-org/live-trading/pkg/connectors/hyperliquid/trading"
+	"github.com/backtesting-org/live-trading/pkg/connectors/types"
 	"go.uber.org/fx"
 )
 
@@ -32,7 +32,7 @@ var Module = fx.Options(
 )
 
 // registerHyperliquid registers the hyperliquid connector with the SDK's ConnectorRegistry
-func registerHyperliquid(hyperliquidConn pkgconnector.Initializable, reg registry.ConnectorRegistry) {
+func registerHyperliquid(hyperliquidConn connector.Connector, reg registry.ConnectorRegistry) {
 	// Register the connector (Initializable embeds connector.Connector)
-	reg.RegisterConnector(connector.Hyperliquid, hyperliquidConn)
+	reg.RegisterConnector(types.Hyperliquid, hyperliquidConn)
 }

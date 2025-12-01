@@ -5,12 +5,13 @@ import (
 
 	"github.com/backtesting-org/kronos-sdk/pkg/types/connector"
 	"github.com/backtesting-org/kronos-sdk/pkg/types/portfolio"
+	"github.com/backtesting-org/live-trading/pkg/connectors/types"
 	"github.com/shopspring/decimal"
 )
 
 func (p *paradex) GetConnectorInfo() *connector.Info {
 	return &connector.Info{
-		Name:             connector.Paradex,
+		Name:             types.Paradex,
 		TradingEnabled:   p.SupportsTradingOperations(),
 		WebSocketEnabled: p.SupportsRealTimeData(),
 		MaxLeverage:      decimal.NewFromFloat(10.0),

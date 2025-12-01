@@ -3,10 +3,10 @@ package bybit
 import (
 	"github.com/backtesting-org/kronos-sdk/pkg/types/connector"
 	"github.com/backtesting-org/kronos-sdk/pkg/types/registry"
-	pkgconnector "github.com/backtesting-org/live-trading/pkg/connector"
 	"github.com/backtesting-org/live-trading/pkg/connectors/bybit/data"
 	"github.com/backtesting-org/live-trading/pkg/connectors/bybit/data/real_time"
 	"github.com/backtesting-org/live-trading/pkg/connectors/bybit/trading"
+	"github.com/backtesting-org/live-trading/pkg/connectors/types"
 	"go.uber.org/fx"
 )
 
@@ -26,6 +26,6 @@ var Module = fx.Options(
 	)),
 )
 
-func registerBybit(bybitConn pkgconnector.Initializable, reg registry.ConnectorRegistry) {
-	reg.RegisterConnector(connector.Bybit, bybitConn)
+func registerBybit(bybitConn connector.Connector, reg registry.ConnectorRegistry) {
+	reg.RegisterConnector(types.Bybit, bybitConn)
 }
