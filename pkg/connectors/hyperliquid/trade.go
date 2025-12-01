@@ -6,11 +6,11 @@ import (
 	"time"
 
 	"github.com/backtesting-org/kronos-sdk/pkg/types/connector"
-	"github.com/shopspring/decimal"
+	"github.com/backtesting-org/kronos-sdk/pkg/types/kronos/numerical"
 )
 
 // PlaceLimitOrder places a limit order on Hyperliquid
-func (h *hyperliquid) PlaceLimitOrder(symbol string, side connector.OrderSide, quantity, price decimal.Decimal) (*connector.OrderResponse, error) {
+func (h *hyperliquid) PlaceLimitOrder(symbol string, side connector.OrderSide, quantity, price numerical.Decimal) (*connector.OrderResponse, error) {
 	if !h.SupportsTradingOperations() {
 		return nil, fmt.Errorf("trading operations not supported")
 	}
@@ -41,7 +41,7 @@ func (h *hyperliquid) PlaceLimitOrder(symbol string, side connector.OrderSide, q
 }
 
 // PlaceMarketOrder places a market order on Hyperliquid
-func (h *hyperliquid) PlaceMarketOrder(symbol string, side connector.OrderSide, quantity decimal.Decimal) (*connector.OrderResponse, error) {
+func (h *hyperliquid) PlaceMarketOrder(symbol string, side connector.OrderSide, quantity numerical.Decimal) (*connector.OrderResponse, error) {
 	if !h.SupportsTradingOperations() {
 		return nil, fmt.Errorf("trading operations not supported")
 	}
@@ -107,8 +107,8 @@ func (h *hyperliquid) GetOpenOrders() ([]connector.Order, error) {
 			ID:        fmt.Sprintf("%d", order.Oid),
 			Symbol:    order.Coin,
 			Side:      connector.FromString(order.Side),
-			Quantity:  decimal.NewFromFloat(order.Size),
-			Price:     decimal.NewFromFloat(order.LimitPx),
+			Quantity:  numerical.NewFromFloat(order.Size),
+			Price:     numerical.NewFromFloat(order.LimitPx),
 			CreatedAt: time.Unix(order.Timestamp/1000, 0),
 		}
 		connectorOrders = append(connectorOrders, connectorOrder)

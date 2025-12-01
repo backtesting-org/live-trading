@@ -8,10 +8,10 @@ import (
 	"time"
 
 	"github.com/backtesting-org/kronos-sdk/pkg/types/connector"
+	"github.com/backtesting-org/kronos-sdk/pkg/types/kronos/numerical"
 	"github.com/backtesting-org/kronos-sdk/pkg/types/portfolio"
 	"github.com/backtesting-org/kronos-sdk/pkg/types/temporal"
 	bybit "github.com/bybit-exchange/bybit.go.api"
-	"github.com/shopspring/decimal"
 )
 
 type Config struct {
@@ -110,27 +110,27 @@ func (m *marketDataService) parseKline(data []interface{}) connector.Kline {
 			}
 		}
 		if open, ok := data[1].(string); ok {
-			if val, err := decimal.NewFromString(open); err == nil {
+			if val, err := numerical.NewFromString(open); err == nil {
 				kline.Open = val
 			}
 		}
 		if high, ok := data[2].(string); ok {
-			if val, err := decimal.NewFromString(high); err == nil {
+			if val, err := numerical.NewFromString(high); err == nil {
 				kline.High = val
 			}
 		}
 		if low, ok := data[3].(string); ok {
-			if val, err := decimal.NewFromString(low); err == nil {
+			if val, err := numerical.NewFromString(low); err == nil {
 				kline.Low = val
 			}
 		}
 		if close, ok := data[4].(string); ok {
-			if val, err := decimal.NewFromString(close); err == nil {
+			if val, err := numerical.NewFromString(close); err == nil {
 				kline.Close = val
 			}
 		}
 		if volume, ok := data[5].(string); ok {
-			if val, err := decimal.NewFromString(volume); err == nil {
+			if val, err := numerical.NewFromString(volume); err == nil {
 				kline.Volume = val
 			}
 		}
@@ -163,7 +163,7 @@ func (m *marketDataService) FetchPrice(symbol string) (*connector.Price, error) 
 			if listData, ok := resultData["list"].([]interface{}); ok && len(listData) > 0 {
 				if tickerData, ok := listData[0].(map[string]interface{}); ok {
 					if lastPrice, ok := tickerData["lastPrice"].(string); ok {
-						if price, err := decimal.NewFromString(lastPrice); err == nil {
+						if price, err := numerical.NewFromString(lastPrice); err == nil {
 							return &connector.Price{
 								Symbol:    symbol,
 								Price:     price,
@@ -214,8 +214,8 @@ func (m *marketDataService) FetchOrderBook(symbol string, depth int) (*connector
 					if bidData, ok := item.([]interface{}); ok && len(bidData) >= 2 {
 						if priceStr, ok := bidData[0].(string); ok {
 							if qtyStr, ok := bidData[1].(string); ok {
-								price, _ := decimal.NewFromString(priceStr)
-								qty, _ := decimal.NewFromString(qtyStr)
+								price, _ := numerical.NewFromString(priceStr)
+								qty, _ := numerical.NewFromString(qtyStr)
 								orderBook.Bids = append(orderBook.Bids, connector.PriceLevel{
 									Price:    price,
 									Quantity: qty,
@@ -230,8 +230,8 @@ func (m *marketDataService) FetchOrderBook(symbol string, depth int) (*connector
 					if askData, ok := item.([]interface{}); ok && len(askData) >= 2 {
 						if priceStr, ok := askData[0].(string); ok {
 							if qtyStr, ok := askData[1].(string); ok {
-								price, _ := decimal.NewFromString(priceStr)
-								qty, _ := decimal.NewFromString(qtyStr)
+								price, _ := numerical.NewFromString(priceStr)
+								qty, _ := numerical.NewFromString(qtyStr)
 								orderBook.Asks = append(orderBook.Asks, connector.PriceLevel{
 									Price:    price,
 									Quantity: qty,
@@ -294,12 +294,12 @@ func (m *marketDataService) parseTrade(data map[string]interface{}, symbol strin
 		trade.Side = connector.OrderSide(side)
 	}
 	if price, ok := data["price"].(string); ok {
-		if val, err := decimal.NewFromString(price); err == nil {
+		if val, err := numerical.NewFromString(price); err == nil {
 			trade.Price = val
 		}
 	}
 	if quantity, ok := data["size"].(string); ok {
-		if val, err := decimal.NewFromString(quantity); err == nil {
+		if val, err := numerical.NewFromString(quantity); err == nil {
 			trade.Quantity = val
 		}
 	}
@@ -331,7 +331,7 @@ func (m *marketDataService) FetchFundingRate(symbol string) (*connector.FundingR
 			if listData, ok := resultData["list"].([]interface{}); ok && len(listData) > 0 {
 				if fundingData, ok := listData[0].(map[string]interface{}); ok {
 					if fundingRate, ok := fundingData["fundingRate"].(string); ok {
-						if rate, err := decimal.NewFromString(fundingRate); err == nil {
+						if rate, err := numerical.NewFromString(fundingRate); err == nil {
 							return &connector.FundingRate{
 								CurrentRate:     rate,
 								Timestamp:       m.timeProvider.Now(),
@@ -497,7 +497,7 @@ func (m *marketDataService) FetchHistoricalFundingRates(symbol string, startTime
 						var rate connector.HistoricalFundingRate
 
 						if fundingRateStr, ok := fundingData["fundingRate"].(string); ok {
-							if fundingRate, err := decimal.NewFromString(fundingRateStr); err == nil {
+							if fundingRate, err := numerical.NewFromString(fundingRateStr); err == nil {
 								rate.FundingRate = fundingRate
 							}
 						}

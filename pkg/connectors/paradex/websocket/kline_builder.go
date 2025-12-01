@@ -5,8 +5,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/backtesting-org/kronos-sdk/pkg/types/kronos/numerical"
 	"github.com/backtesting-org/kronos-sdk/pkg/types/temporal"
-	"github.com/shopspring/decimal"
 )
 
 type KlineBuilder struct {
@@ -19,11 +19,11 @@ type KlineBuilder struct {
 type ActiveKline struct {
 	Symbol     string
 	Interval   string
-	Open       decimal.Decimal
-	High       decimal.Decimal
-	Low        decimal.Decimal
-	Close      decimal.Decimal
-	Volume     decimal.Decimal
+	Open       numerical.Decimal
+	High       numerical.Decimal
+	Low        numerical.Decimal
+	Close      numerical.Decimal
+	Volume     numerical.Decimal
 	OpenTime   time.Time
 	CloseTime  time.Time
 	TradeCount int64
@@ -33,11 +33,11 @@ type ActiveKline struct {
 type KlineUpdate struct {
 	Symbol     string
 	Interval   string
-	Open       decimal.Decimal
-	High       decimal.Decimal
-	Low        decimal.Decimal
-	Close      decimal.Decimal
-	Volume     decimal.Decimal
+	Open       numerical.Decimal
+	High       numerical.Decimal
+	Low        numerical.Decimal
+	Close      numerical.Decimal
+	Volume     numerical.Decimal
 	OpenTime   time.Time
 	CloseTime  time.Time
 	TradeCount int64
@@ -104,7 +104,7 @@ func (kb *KlineBuilder) getOrCreateKline(key string, trade TradeUpdate, interval
 		Interval:  interval,
 		OpenTime:  openTime,
 		CloseTime: closeTime,
-		Volume:    decimal.Zero,
+		Volume:    numerical.Zero(),
 	}
 
 	kb.activeKlines[key] = kline

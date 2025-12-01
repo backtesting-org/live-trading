@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/backtesting-org/kronos-sdk/pkg/types/kronos/numerical"
 	"github.com/backtesting-org/kronos-sdk/pkg/types/logging"
 	"github.com/backtesting-org/kronos-sdk/pkg/types/temporal"
-	"github.com/shopspring/decimal"
 	hyperliquidsdk "github.com/sonirico/go-hyperliquid"
 )
 
@@ -60,13 +60,13 @@ func (p *Parser) ParseOrderBook(msg hyperliquidsdk.WSMessage) (*OrderBookMessage
 					continue
 				}
 
-				price, err := decimal.NewFromString(priceStr)
+				price, err := numerical.NewFromString(priceStr)
 				if err != nil {
 					p.logger.Warn("Invalid bid price", "coin", coin, "price", priceStr, "error", err)
 					continue
 				}
 
-				quantity, err := decimal.NewFromString(sizeStr)
+				quantity, err := numerical.NewFromString(sizeStr)
 				if err != nil {
 					p.logger.Warn("Invalid bid quantity", "coin", coin, "quantity", sizeStr, "error", err)
 					continue
@@ -91,13 +91,13 @@ func (p *Parser) ParseOrderBook(msg hyperliquidsdk.WSMessage) (*OrderBookMessage
 					continue
 				}
 
-				price, err := decimal.NewFromString(priceStr)
+				price, err := numerical.NewFromString(priceStr)
 				if err != nil {
 					p.logger.Warn("Invalid ask price", "coin", coin, "price", priceStr, "error", err)
 					continue
 				}
 
-				quantity, err := decimal.NewFromString(sizeStr)
+				quantity, err := numerical.NewFromString(sizeStr)
 				if err != nil {
 					p.logger.Warn("Invalid ask quantity", "coin", coin, "quantity", sizeStr, "error", err)
 					continue
@@ -154,13 +154,13 @@ func (p *Parser) ParseTrades(msg hyperliquidsdk.WSMessage) ([]TradeMessage, erro
 			continue
 		}
 
-		price, err := decimal.NewFromString(priceStr)
+		price, err := numerical.NewFromString(priceStr)
 		if err != nil {
 			p.logger.Warn("Invalid trade price", "coin", coin, "price", priceStr, "error", err)
 			continue
 		}
 
-		quantity, err := decimal.NewFromString(sizeStr)
+		quantity, err := numerical.NewFromString(sizeStr)
 		if err != nil {
 			p.logger.Warn("Invalid trade quantity", "coin", coin, "quantity", sizeStr, "error", err)
 			continue
@@ -223,12 +223,12 @@ func (p *Parser) ParsePosition(msg hyperliquidsdk.WSMessage) (*PositionMessage, 
 	unrealizedPnlStr, _ := position["unrealizedPnl"].(string)
 	returnOnEquityStr, _ := position["returnOnEquity"].(string)
 
-	size, _ := decimal.NewFromString(sziStr)
-	entryPrice, _ := decimal.NewFromString(entryPxStr)
-	marginUsed, _ := decimal.NewFromString(marginUsedStr)
-	positionValue, _ := decimal.NewFromString(positionValueStr)
-	unrealizedPnl, _ := decimal.NewFromString(unrealizedPnlStr)
-	returnOnEquity, _ := decimal.NewFromString(returnOnEquityStr)
+	size, _ := numerical.NewFromString(sziStr)
+	entryPrice, _ := numerical.NewFromString(entryPxStr)
+	marginUsed, _ := numerical.NewFromString(marginUsedStr)
+	positionValue, _ := numerical.NewFromString(positionValueStr)
+	unrealizedPnl, _ := numerical.NewFromString(unrealizedPnlStr)
+	returnOnEquity, _ := numerical.NewFromString(returnOnEquityStr)
 
 	return &PositionMessage{
 		Coin:           coin,
@@ -265,11 +265,11 @@ func (p *Parser) ParseAccountBalance(msg hyperliquidsdk.WSMessage) (*AccountBala
 
 	withdrawableStr, _ := data["withdrawable"].(string)
 
-	accountValue, _ := decimal.NewFromString(accountValueStr)
-	totalMarginUsed, _ := decimal.NewFromString(totalMarginUsedStr)
-	totalNtlPos, _ := decimal.NewFromString(totalNtlPosStr)
-	totalRawUsd, _ := decimal.NewFromString(totalRawUsdStr)
-	withdrawable, _ := decimal.NewFromString(withdrawableStr)
+	accountValue, _ := numerical.NewFromString(accountValueStr)
+	totalMarginUsed, _ := numerical.NewFromString(totalMarginUsedStr)
+	totalNtlPos, _ := numerical.NewFromString(totalNtlPosStr)
+	totalRawUsd, _ := numerical.NewFromString(totalRawUsdStr)
+	withdrawable, _ := numerical.NewFromString(withdrawableStr)
 
 	return &AccountBalanceMessage{
 		TotalAccountValue: accountValue,
@@ -302,11 +302,11 @@ func (p *Parser) ParseKline(msg hyperliquidsdk.WSMessage) (*KlineMessage, error)
 	openTime, _ := data["t"].(float64)
 	closeTime, _ := data["T"].(float64)
 
-	open, _ := decimal.NewFromString(openStr)
-	high, _ := decimal.NewFromString(highStr)
-	low, _ := decimal.NewFromString(lowStr)
-	close, _ := decimal.NewFromString(closeStr)
-	volume, _ := decimal.NewFromString(volumeStr)
+	open, _ := numerical.NewFromString(openStr)
+	high, _ := numerical.NewFromString(highStr)
+	low, _ := numerical.NewFromString(lowStr)
+	close, _ := numerical.NewFromString(closeStr)
+	volume, _ := numerical.NewFromString(volumeStr)
 
 	return &KlineMessage{
 		Coin:      coin,

@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/backtesting-org/kronos-sdk/pkg/types/kronos/numerical"
 	bybit "github.com/bybit-exchange/bybit.go.api"
 
 	"github.com/backtesting-org/kronos-sdk/pkg/types/connector"
 	"github.com/backtesting-org/kronos-sdk/pkg/types/portfolio"
 	"github.com/backtesting-org/kronos-sdk/pkg/types/temporal"
-	"github.com/shopspring/decimal"
 )
 
 type Config struct {
@@ -23,8 +23,8 @@ type Config struct {
 
 type TradingService interface {
 	Initialize(config *Config) error
-	PlaceLimitOrder(symbol string, side connector.OrderSide, quantity, price decimal.Decimal) (*connector.OrderResponse, error)
-	PlaceMarketOrder(symbol string, side connector.OrderSide, quantity decimal.Decimal) (*connector.OrderResponse, error)
+	PlaceLimitOrder(symbol string, side connector.OrderSide, quantity, price numerical.Decimal) (*connector.OrderResponse, error)
+	PlaceMarketOrder(symbol string, side connector.OrderSide, quantity numerical.Decimal) (*connector.OrderResponse, error)
 	CancelOrder(symbol, orderID string) (*connector.CancelResponse, error)
 	GetOpenOrders() ([]connector.Order, error)
 	GetOrderStatus(orderID string) (*connector.Order, error)
@@ -59,7 +59,7 @@ func (t *tradingService) Initialize(config *Config) error {
 	return nil
 }
 
-func (t *tradingService) PlaceLimitOrder(symbol string, side connector.OrderSide, quantity, price decimal.Decimal) (*connector.OrderResponse, error) {
+func (t *tradingService) PlaceLimitOrder(symbol string, side connector.OrderSide, quantity, price numerical.Decimal) (*connector.OrderResponse, error) {
 	t.mu.RLock()
 	client := t.client
 	t.mu.RUnlock()
@@ -104,7 +104,7 @@ func (t *tradingService) PlaceLimitOrder(symbol string, side connector.OrderSide
 	}, nil
 }
 
-func (t *tradingService) PlaceMarketOrder(symbol string, side connector.OrderSide, quantity decimal.Decimal) (*connector.OrderResponse, error) {
+func (t *tradingService) PlaceMarketOrder(symbol string, side connector.OrderSide, quantity numerical.Decimal) (*connector.OrderResponse, error) {
 	t.mu.RLock()
 	client := t.client
 	t.mu.RUnlock()
@@ -251,8 +251,8 @@ func (t *tradingService) parseOrder(data map[string]interface{}) connector.Order
 	qtyStr, _ := data["qty"].(string)
 	priceStr, _ := data["price"].(string)
 
-	qty, _ := decimal.NewFromString(qtyStr)
-	price, _ := decimal.NewFromString(priceStr)
+	qty, _ := numerical.NewFromString(qtyStr)
+	price, _ := numerical.NewFromString(priceStr)
 
 	return connector.Order{
 		ID:        orderID,
@@ -292,22 +292,22 @@ func (t *tradingService) GetAccountBalance() (*connector.AccountBalance, error) 
 			if listData, ok := resultData["list"].([]interface{}); ok && len(listData) > 0 {
 				if accountData, ok := listData[0].(map[string]interface{}); ok {
 					if totalEquity, ok := accountData["totalEquity"].(string); ok {
-						if val, err := decimal.NewFromString(totalEquity); err == nil {
+						if val, err := numerical.NewFromString(totalEquity); err == nil {
 							balance.TotalBalance = val
 						}
 					}
 					if availableBalance, ok := accountData["totalAvailableBalance"].(string); ok {
-						if val, err := decimal.NewFromString(availableBalance); err == nil {
+						if val, err := numerical.NewFromString(availableBalance); err == nil {
 							balance.AvailableBalance = val
 						}
 					}
 					if totalMarginBalance, ok := accountData["totalMarginBalance"].(string); ok {
-						if val, err := decimal.NewFromString(totalMarginBalance); err == nil {
+						if val, err := numerical.NewFromString(totalMarginBalance); err == nil {
 							balance.UsedMargin = balance.TotalBalance.Sub(val)
 						}
 					}
 					if totalPerpUPL, ok := accountData["totalPerpUPL"].(string); ok {
-						if val, err := decimal.NewFromString(totalPerpUPL); err == nil {
+						if val, err := numerical.NewFromString(totalPerpUPL); err == nil {
 							balance.UnrealizedPnL = val
 						}
 					}
@@ -370,37 +370,37 @@ func (t *tradingService) parsePosition(data map[string]interface{}) connector.Po
 		pos.Side = connector.OrderSide(side)
 	}
 	if size, ok := data["size"].(string); ok {
-		if val, err := decimal.NewFromString(size); err == nil {
+		if val, err := numerical.NewFromString(size); err == nil {
 			pos.Size = val
 		}
 	}
 	if avgPrice, ok := data["avgPrice"].(string); ok {
-		if val, err := decimal.NewFromString(avgPrice); err == nil {
+		if val, err := numerical.NewFromString(avgPrice); err == nil {
 			pos.EntryPrice = val
 		}
 	}
 	if markPrice, ok := data["markPrice"].(string); ok {
-		if val, err := decimal.NewFromString(markPrice); err == nil {
+		if val, err := numerical.NewFromString(markPrice); err == nil {
 			pos.MarkPrice = val
 		}
 	}
 	if unrealizedPnl, ok := data["unrealisedPnl"].(string); ok {
-		if val, err := decimal.NewFromString(unrealizedPnl); err == nil {
+		if val, err := numerical.NewFromString(unrealizedPnl); err == nil {
 			pos.UnrealizedPnL = val
 		}
 	}
 	if cumRealisedPnl, ok := data["cumRealisedPnl"].(string); ok {
-		if val, err := decimal.NewFromString(cumRealisedPnl); err == nil {
+		if val, err := numerical.NewFromString(cumRealisedPnl); err == nil {
 			pos.RealizedPnL = val
 		}
 	}
 	if leverage, ok := data["leverage"].(string); ok {
-		if val, err := decimal.NewFromString(leverage); err == nil {
+		if val, err := numerical.NewFromString(leverage); err == nil {
 			pos.Leverage = val
 		}
 	}
 	if liqPrice, ok := data["liqPrice"].(string); ok {
-		if val, err := decimal.NewFromString(liqPrice); err == nil {
+		if val, err := numerical.NewFromString(liqPrice); err == nil {
 			pos.LiquidationPrice = val
 		}
 	}
@@ -444,12 +444,12 @@ func (t *tradingService) GetTradingHistory(symbol string, limit int) ([]connecto
 							trade.Side = connector.OrderSide(side)
 						}
 						if price, ok := tradeData["execPrice"].(string); ok {
-							if val, err := decimal.NewFromString(price); err == nil {
+							if val, err := numerical.NewFromString(price); err == nil {
 								trade.Price = val
 							}
 						}
 						if qty, ok := tradeData["execQty"].(string); ok {
-							if val, err := decimal.NewFromString(qty); err == nil {
+							if val, err := numerical.NewFromString(qty); err == nil {
 								trade.Quantity = val
 							}
 						}

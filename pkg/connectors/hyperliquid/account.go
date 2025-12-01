@@ -4,9 +4,9 @@ import (
 	"fmt"
 
 	"github.com/backtesting-org/kronos-sdk/pkg/types/connector"
+	"github.com/backtesting-org/kronos-sdk/pkg/types/kronos/numerical"
 	"github.com/backtesting-org/kronos-sdk/pkg/types/portfolio"
 	"github.com/backtesting-org/live-trading/pkg/connectors/types"
-	"github.com/shopspring/decimal"
 )
 
 func (h *hyperliquid) GetAccountBalance() (*connector.AccountBalance, error) {
@@ -46,14 +46,14 @@ func (h *hyperliquid) GetPositions() ([]connector.Position, error) {
 		// Simple decimal conversion - defaults to zero on error
 		positionSize := parseDecimal(pos.Szi)
 		unrealizedPnL := parseDecimal(pos.UnrealizedPnl)
-		leverage := decimal.NewFromInt(int64(pos.Leverage.Value))
+		leverage := numerical.NewFromInt(int64(pos.Leverage.Value))
 
-		var entryPrice decimal.Decimal
+		var entryPrice numerical.Decimal
 		if pos.EntryPx != nil {
 			entryPrice = parseDecimal(*pos.EntryPx)
 		}
 
-		var liquidationPrice decimal.Decimal
+		var liquidationPrice numerical.Decimal
 		if pos.LiquidationPx != nil {
 			liquidationPrice = parseDecimal(*pos.LiquidationPx)
 		}
@@ -78,7 +78,7 @@ func (h *hyperliquid) GetPositions() ([]connector.Position, error) {
 			EntryPrice:       entryPrice,
 			MarkPrice:        markPrice,
 			UnrealizedPnL:    unrealizedPnL,
-			RealizedPnL:      decimal.Zero,
+			RealizedPnL:      numerical.Zero(),
 			Leverage:         leverage,
 			MarginType:       pos.Leverage.Type,
 			LiquidationPrice: liquidationPrice,

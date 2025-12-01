@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/shopspring/decimal"
+	"github.com/backtesting-org/kronos-sdk/pkg/types/kronos/numerical"
 )
 
 // WebSocketService defines the interface for WebSocket-based exchange connectivity
@@ -97,8 +97,8 @@ type OrderbookUpdate struct {
 }
 
 type PriceLevel struct {
-	Price    decimal.Decimal `json:"price"`
-	Quantity decimal.Decimal `json:"quantity"`
+	Price    numerical.Decimal `json:"price"`
+	Quantity numerical.Decimal `json:"quantity"`
 }
 
 // Trade messages
@@ -117,12 +117,12 @@ type TradeData struct {
 }
 
 type TradeUpdate struct {
-	Symbol    string          `json:"symbol"`
-	Price     decimal.Decimal `json:"price"`
-	Quantity  decimal.Decimal `json:"quantity"`
-	Side      string          `json:"side"`
-	Timestamp time.Time       `json:"timestamp"`
-	TradeID   string          `json:"trade_id"`
+	Symbol    string            `json:"symbol"`
+	Price     numerical.Decimal `json:"price"`
+	Quantity  numerical.Decimal `json:"quantity"`
+	Side      string            `json:"side"`
+	Timestamp time.Time         `json:"timestamp"`
+	TradeID   string            `json:"trade_id"`
 }
 
 // Account messages
@@ -151,17 +151,17 @@ type AccountData struct {
 }
 
 type AccountUpdate struct {
-	Type          string          `json:"type"`
-	Symbol        string          `json:"symbol,omitempty"`
-	Balance       decimal.Decimal `json:"balance,omitempty"`
-	Available     decimal.Decimal `json:"available,omitempty"`
-	Size          decimal.Decimal `json:"size,omitempty"`
-	EntryPrice    decimal.Decimal `json:"entry_price,omitempty"`
-	UnrealizedPnL decimal.Decimal `json:"unrealized_pnl,omitempty"`
-	Side          string          `json:"side,omitempty"`
-	OrderID       string          `json:"order_id,omitempty"`
-	Status        string          `json:"status,omitempty"`
-	Timestamp     time.Time       `json:"timestamp"`
+	Type          string            `json:"type"`
+	Symbol        string            `json:"symbol,omitempty"`
+	Balance       numerical.Decimal `json:"balance,omitempty"`
+	Available     numerical.Decimal `json:"available,omitempty"`
+	Size          numerical.Decimal `json:"size,omitempty"`
+	EntryPrice    numerical.Decimal `json:"entry_price,omitempty"`
+	UnrealizedPnL numerical.Decimal `json:"unrealized_pnl,omitempty"`
+	Side          string            `json:"side,omitempty"`
+	OrderID       string            `json:"order_id,omitempty"`
+	Status        string            `json:"status,omitempty"`
+	Timestamp     time.Time         `json:"timestamp"`
 }
 
 // Message handler interface

@@ -4,16 +4,16 @@ import (
 	"time"
 
 	"github.com/backtesting-org/kronos-sdk/pkg/types/connector"
-	"github.com/shopspring/decimal"
+	"github.com/backtesting-org/kronos-sdk/pkg/types/kronos/numerical"
 	"github.com/trishtzy/go-paradex/models"
 )
 
 func (p *paradex) convertParadexOrder(paradexOrder *models.ResponsesOrderResp) connector.Order {
 	// Parse decimal values with error handling
-	quantity, _ := decimal.NewFromString(paradexOrder.Size)
-	price, _ := decimal.NewFromString(paradexOrder.Price)
-	avgPrice, _ := decimal.NewFromString(paradexOrder.AvgFillPrice)
-	remainingQty, _ := decimal.NewFromString(paradexOrder.RemainingSize)
+	quantity, _ := numerical.NewFromString(paradexOrder.Size)
+	price, _ := numerical.NewFromString(paradexOrder.Price)
+	avgPrice, _ := numerical.NewFromString(paradexOrder.AvgFillPrice)
+	remainingQty, _ := numerical.NewFromString(paradexOrder.RemainingSize)
 
 	// Calculate filled quantity
 	filledQty := quantity.Sub(remainingQty)

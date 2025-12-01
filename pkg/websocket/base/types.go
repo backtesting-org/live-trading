@@ -3,7 +3,7 @@ package base
 import (
 	"time"
 
-	"github.com/shopspring/decimal"
+	"github.com/backtesting-org/kronos-sdk/pkg/types/kronos/numerical"
 )
 
 // BaseMessage represents the common structure of all WebSocket messages
@@ -48,79 +48,79 @@ type OrderbookUpdate struct {
 
 // PriceLevel represents a price level in an orderbook
 type PriceLevel struct {
-	Price    decimal.Decimal `json:"price"`
-	Quantity decimal.Decimal `json:"quantity"`
+	Price    numerical.Decimal `json:"price"`
+	Quantity numerical.Decimal `json:"quantity"`
 }
 
 // TradeUpdate represents a trade execution update
 type TradeUpdate struct {
-	Symbol    string          `json:"symbol"`
-	Price     decimal.Decimal `json:"price"`
-	Quantity  decimal.Decimal `json:"quantity"`
-	Side      string          `json:"side"`
-	Timestamp time.Time       `json:"timestamp"`
-	TradeID   string          `json:"trade_id"`
+	Symbol    string            `json:"symbol"`
+	Price     numerical.Decimal `json:"price"`
+	Quantity  numerical.Decimal `json:"quantity"`
+	Side      string            `json:"side"`
+	Timestamp time.Time         `json:"timestamp"`
+	TradeID   string            `json:"trade_id"`
 }
 
 // TickerUpdate represents a price ticker update
 type TickerUpdate struct {
-	Symbol    string          `json:"symbol"`
-	Price     decimal.Decimal `json:"price"`
-	BidPrice  decimal.Decimal `json:"bid_price,omitempty"`
-	AskPrice  decimal.Decimal `json:"ask_price,omitempty"`
-	Volume24h decimal.Decimal `json:"volume_24h,omitempty"`
-	Change24h decimal.Decimal `json:"change_24h,omitempty"`
-	Timestamp time.Time       `json:"timestamp"`
+	Symbol    string            `json:"symbol"`
+	Price     numerical.Decimal `json:"price"`
+	BidPrice  numerical.Decimal `json:"bid_price,omitempty"`
+	AskPrice  numerical.Decimal `json:"ask_price,omitempty"`
+	Volume24h numerical.Decimal `json:"volume_24h,omitempty"`
+	Change24h numerical.Decimal `json:"change_24h,omitempty"`
+	Timestamp time.Time         `json:"timestamp"`
 }
 
 // AccountUpdate represents account-related updates
 type AccountUpdate struct {
-	Type          string          `json:"type"`
-	Symbol        string          `json:"symbol,omitempty"`
-	Balance       decimal.Decimal `json:"balance,omitempty"`
-	Available     decimal.Decimal `json:"available,omitempty"`
-	Size          decimal.Decimal `json:"size,omitempty"`
-	EntryPrice    decimal.Decimal `json:"entry_price,omitempty"`
-	UnrealizedPnL decimal.Decimal `json:"unrealized_pnl,omitempty"`
-	Side          string          `json:"side,omitempty"`
-	OrderID       string          `json:"order_id,omitempty"`
-	Status        string          `json:"status,omitempty"`
-	Timestamp     time.Time       `json:"timestamp"`
+	Type          string            `json:"type"`
+	Symbol        string            `json:"symbol,omitempty"`
+	Balance       numerical.Decimal `json:"balance,omitempty"`
+	Available     numerical.Decimal `json:"available,omitempty"`
+	Size          numerical.Decimal `json:"size,omitempty"`
+	EntryPrice    numerical.Decimal `json:"entry_price,omitempty"`
+	UnrealizedPnL numerical.Decimal `json:"unrealized_pnl,omitempty"`
+	Side          string            `json:"side,omitempty"`
+	OrderID       string            `json:"order_id,omitempty"`
+	Status        string            `json:"status,omitempty"`
+	Timestamp     time.Time         `json:"timestamp"`
 }
 
 // OrderUpdate represents order status updates
 type OrderUpdate struct {
-	OrderID      string          `json:"order_id"`
-	Symbol       string          `json:"symbol"`
-	Side         string          `json:"side"`
-	Type         string          `json:"type"`
-	Status       string          `json:"status"`
-	Quantity     decimal.Decimal `json:"quantity"`
-	Price        decimal.Decimal `json:"price,omitempty"`
-	FilledQty    decimal.Decimal `json:"filled_quantity"`
-	RemainingQty decimal.Decimal `json:"remaining_quantity"`
-	AvgPrice     decimal.Decimal `json:"average_price,omitempty"`
-	Timestamp    time.Time       `json:"timestamp"`
+	OrderID      string            `json:"order_id"`
+	Symbol       string            `json:"symbol"`
+	Side         string            `json:"side"`
+	Type         string            `json:"type"`
+	Status       string            `json:"status"`
+	Quantity     numerical.Decimal `json:"quantity"`
+	Price        numerical.Decimal `json:"price,omitempty"`
+	FilledQty    numerical.Decimal `json:"filled_quantity"`
+	RemainingQty numerical.Decimal `json:"remaining_quantity"`
+	AvgPrice     numerical.Decimal `json:"average_price,omitempty"`
+	Timestamp    time.Time         `json:"timestamp"`
 }
 
 // PositionUpdate represents position updates
 type PositionUpdate struct {
-	Symbol        string          `json:"symbol"`
-	Side          string          `json:"side"`
-	Size          decimal.Decimal `json:"size"`
-	EntryPrice    decimal.Decimal `json:"entry_price"`
-	MarkPrice     decimal.Decimal `json:"mark_price,omitempty"`
-	UnrealizedPnL decimal.Decimal `json:"unrealized_pnl"`
-	RealizedPnL   decimal.Decimal `json:"realized_pnl,omitempty"`
-	Timestamp     time.Time       `json:"timestamp"`
+	Symbol        string            `json:"symbol"`
+	Side          string            `json:"side"`
+	Size          numerical.Decimal `json:"size"`
+	EntryPrice    numerical.Decimal `json:"entry_price"`
+	MarkPrice     numerical.Decimal `json:"mark_price,omitempty"`
+	UnrealizedPnL numerical.Decimal `json:"unrealized_pnl"`
+	RealizedPnL   numerical.Decimal `json:"realized_pnl,omitempty"`
+	Timestamp     time.Time         `json:"timestamp"`
 }
 
 // FundingRateUpdate represents funding rate updates
 type FundingRateUpdate struct {
-	Symbol      string          `json:"symbol"`
-	FundingRate decimal.Decimal `json:"funding_rate"`
-	NextFunding time.Time       `json:"next_funding"`
-	Timestamp   time.Time       `json:"timestamp"`
+	Symbol      string            `json:"symbol"`
+	FundingRate numerical.Decimal `json:"funding_rate"`
+	NextFunding time.Time         `json:"next_funding"`
+	Timestamp   time.Time         `json:"timestamp"`
 }
 
 // UpdateType represents the type of update received

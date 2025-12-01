@@ -5,8 +5,8 @@ import (
 	"time"
 
 	"github.com/backtesting-org/kronos-sdk/pkg/types/connector"
+	"github.com/backtesting-org/kronos-sdk/pkg/types/kronos/numerical"
 	"github.com/backtesting-org/kronos-sdk/pkg/types/portfolio"
-	"github.com/shopspring/decimal"
 )
 
 func (h *hyperliquid) FetchCurrentFundingRates() (map[portfolio.Asset]connector.FundingRate, error) {
@@ -20,7 +20,7 @@ func (h *hyperliquid) FetchCurrentFundingRates() (map[portfolio.Asset]connector.
 	for _, ctx := range contexts {
 		asset := portfolio.NewAsset(ctx.Name)
 
-		funding, err := decimal.NewFromString(ctx.Funding)
+		funding, err := numerical.NewFromString(ctx.Funding)
 		if err != nil {
 			h.appLogger.Warn("Invalid funding rate, skipping asset",
 				"asset", ctx.Name,
@@ -29,7 +29,7 @@ func (h *hyperliquid) FetchCurrentFundingRates() (map[portfolio.Asset]connector.
 			continue
 		}
 
-		markPrice, err := decimal.NewFromString(ctx.MarkPrice)
+		markPrice, err := numerical.NewFromString(ctx.MarkPrice)
 		if err != nil {
 			h.appLogger.Warn("Invalid mark price, skipping asset",
 				"asset", ctx.Name,
@@ -38,7 +38,7 @@ func (h *hyperliquid) FetchCurrentFundingRates() (map[portfolio.Asset]connector.
 			continue
 		}
 
-		oraclePrice, err := decimal.NewFromString(ctx.OraclePrice)
+		oraclePrice, err := numerical.NewFromString(ctx.OraclePrice)
 		if err != nil {
 			h.appLogger.Warn("Invalid oracle price, skipping asset",
 				"asset", ctx.Name,
@@ -65,17 +65,17 @@ func (h *hyperliquid) FetchFundingRate(asset portfolio.Asset) (*connector.Fundin
 		return nil, fmt.Errorf("failed to get asset context: %w", err)
 	}
 
-	funding, err := decimal.NewFromString(ctx.Funding)
+	funding, err := numerical.NewFromString(ctx.Funding)
 	if err != nil {
 		return nil, fmt.Errorf("invalid funding rate for %s: %w", asset.Symbol(), err)
 	}
 
-	markPrice, err := decimal.NewFromString(ctx.MarkPrice)
+	markPrice, err := numerical.NewFromString(ctx.MarkPrice)
 	if err != nil {
 		return nil, fmt.Errorf("invalid mark price for %s: %w", asset.Symbol(), err)
 	}
 
-	oraclePrice, err := decimal.NewFromString(ctx.OraclePrice)
+	oraclePrice, err := numerical.NewFromString(ctx.OraclePrice)
 	if err != nil {
 		return nil, fmt.Errorf("invalid oracle price for %s: %w", asset.Symbol(), err)
 	}
@@ -97,7 +97,7 @@ func (h *hyperliquid) FetchHistoricalFundingRates(symbol portfolio.Asset, startT
 
 	var rates []connector.HistoricalFundingRate
 	for _, entry := range rawData {
-		fundingRate, err := decimal.NewFromString(entry.FundingRate)
+		fundingRate, err := numerical.NewFromString(entry.FundingRate)
 
 		if err != nil {
 			return nil, fmt.Errorf("invalid funding rate %s for symbol %s: %w", entry.FundingRate, symbol.Symbol(), err)

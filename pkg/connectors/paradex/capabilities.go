@@ -4,9 +4,9 @@ import (
 	"fmt"
 
 	"github.com/backtesting-org/kronos-sdk/pkg/types/connector"
+	"github.com/backtesting-org/kronos-sdk/pkg/types/kronos/numerical"
 	"github.com/backtesting-org/kronos-sdk/pkg/types/portfolio"
 	"github.com/backtesting-org/live-trading/pkg/connectors/types"
-	"github.com/shopspring/decimal"
 )
 
 func (p *paradex) GetConnectorInfo() *connector.Info {
@@ -14,7 +14,7 @@ func (p *paradex) GetConnectorInfo() *connector.Info {
 		Name:             types.Paradex,
 		TradingEnabled:   p.SupportsTradingOperations(),
 		WebSocketEnabled: p.SupportsRealTimeData(),
-		MaxLeverage:      decimal.NewFromFloat(10.0),
+		MaxLeverage:      numerical.NewFromFloat(10.0),
 		SupportedOrderTypes: []connector.OrderType{
 			connector.OrderTypeLimit,
 			connector.OrderTypeMarket,

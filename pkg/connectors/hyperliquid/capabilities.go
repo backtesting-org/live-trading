@@ -2,8 +2,8 @@ package hyperliquid
 
 import (
 	"github.com/backtesting-org/kronos-sdk/pkg/types/connector"
+	"github.com/backtesting-org/kronos-sdk/pkg/types/kronos/numerical"
 	"github.com/backtesting-org/live-trading/pkg/connectors/types"
-	"github.com/shopspring/decimal"
 )
 
 // SupportsTradingOperations returns whether trading operations are supported
@@ -35,7 +35,7 @@ func (h *hyperliquid) GetConnectorInfo() *connector.Info {
 		Name:             types.Hyperliquid,
 		TradingEnabled:   h.SupportsTradingOperations(),
 		WebSocketEnabled: true,
-		MaxLeverage:      decimal.NewFromFloat(50.0),
+		MaxLeverage:      numerical.NewFromFloat(50.0),
 		SupportedOrderTypes: []connector.OrderType{
 			connector.OrderTypeLimit,
 			connector.OrderTypeMarket,

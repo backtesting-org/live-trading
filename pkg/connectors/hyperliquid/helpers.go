@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/shopspring/decimal"
+	"github.com/backtesting-org/kronos-sdk/pkg/types/kronos/numerical"
 )
 
 // extractOrderID extracts order ID from trading service response
@@ -53,15 +53,15 @@ func intervalToSeconds(interval string) int {
 	}
 }
 
-func parseDecimal(value string) decimal.Decimal {
+func parseDecimal(value string) numerical.Decimal {
 	if value == "" {
-		return decimal.Zero
+		return numerical.Zero()
 	}
 
-	d, err := decimal.NewFromString(value)
+	d, err := numerical.NewFromString(value)
 	if err != nil {
 		log.Printf("Failed to parse decimal '%s': %v", value, err)
-		return decimal.Zero
+		return numerical.Zero()
 	}
 
 	return d

@@ -5,8 +5,8 @@ import (
 	"time"
 
 	"github.com/backtesting-org/kronos-sdk/pkg/types/connector"
+	"github.com/backtesting-org/kronos-sdk/pkg/types/kronos/numerical"
 	"github.com/backtesting-org/kronos-sdk/pkg/types/portfolio"
-	"github.com/shopspring/decimal"
 )
 
 func (p *paradex) GetAccountBalance() (*connector.AccountBalance, error) {
@@ -16,10 +16,10 @@ func (p *paradex) GetAccountBalance() (*connector.AccountBalance, error) {
 	}
 
 	// Parse all needed fields
-	accountValue, _ := decimal.NewFromString(account.AccountValue)
-	totalCollateral, _ := decimal.NewFromString(account.TotalCollateral)
-	freeCollateral, _ := decimal.NewFromString(account.FreeCollateral)
-	initialMargin, _ := decimal.NewFromString(account.InitialMarginRequirement)
+	accountValue, _ := numerical.NewFromString(account.AccountValue)
+	totalCollateral, _ := numerical.NewFromString(account.TotalCollateral)
+	freeCollateral, _ := numerical.NewFromString(account.FreeCollateral)
+	initialMargin, _ := numerical.NewFromString(account.InitialMarginRequirement)
 	currency := account.SettlementAsset
 	if currency == "" {
 		currency = "USD"
@@ -52,14 +52,14 @@ func (p *paradex) GetPositions() ([]connector.Position, error) {
 
 	var result []connector.Position
 	for _, pos := range positionsResp.Results {
-		size, _ := decimal.NewFromString(pos.Size)
-		entryPrice, _ := decimal.NewFromString(pos.AverageEntryPrice)
-		unrealizedPnL, _ := decimal.NewFromString(pos.UnrealizedPnl)
+		size, _ := numerical.NewFromString(pos.Size)
+		entryPrice, _ := numerical.NewFromString(pos.AverageEntryPrice)
+		unrealizedPnL, _ := numerical.NewFromString(pos.UnrealizedPnl)
 
 		// MarkPrice is not in the paradex API, so set to zero
-		var markPrice decimal.Decimal
+		var markPrice numerical.Decimal
 
-		realizedPnL, _ := decimal.NewFromString(pos.RealizedPositionalPnl)
+		realizedPnL, _ := numerical.NewFromString(pos.RealizedPositionalPnl)
 		updatedAt := time.UnixMilli(pos.LastUpdatedAt)
 
 		result = append(result, connector.Position{

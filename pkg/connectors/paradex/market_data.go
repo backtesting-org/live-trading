@@ -5,8 +5,8 @@ import (
 	"time"
 
 	"github.com/backtesting-org/kronos-sdk/pkg/types/connector"
+	"github.com/backtesting-org/kronos-sdk/pkg/types/kronos/numerical"
 	"github.com/backtesting-org/kronos-sdk/pkg/types/portfolio"
-	"github.com/shopspring/decimal"
 )
 
 func (p *paradex) FetchPrice(symbol string) (*connector.Price, error) {
@@ -22,7 +22,7 @@ func (p *paradex) FetchPrice(symbol string) (*connector.Price, error) {
 		return nil, fmt.Errorf("price not found for %s", symbol)
 	}
 
-	priceValue, err := decimal.NewFromString(price.Bid)
+	priceValue, err := numerical.NewFromString(price.Bid)
 	if err != nil {
 		p.appLogger.Error("Invalid price format", "symbol", symbol, "price", price.Bid, "error", err)
 		return nil, fmt.Errorf("invalid price format for %s: %w", symbol, err)
@@ -33,8 +33,8 @@ func (p *paradex) FetchPrice(symbol string) (*connector.Price, error) {
 		Price:     priceValue,
 		BidPrice:  priceValue,
 		AskPrice:  priceValue,
-		Volume24h: decimal.Zero, // Volume not provided by paradex
-		Change24h: decimal.Zero, // Change not provided by paradex
+		Volume24h: numerical.Zero(), // Volume not provided by paradex
+		Change24h: numerical.Zero(), // Change not provided by paradex
 		Source:    p.GetConnectorInfo().Name,
 		Timestamp: time.Now(), // Use current time as paradex does not provide timestamp
 	}, nil
@@ -58,8 +58,8 @@ func (p *paradex) FetchOrderBook(symbol portfolio.Asset, instrument connector.In
 	bids := make([]connector.PriceLevel, len(orderBook.Bids))
 	for i, bid := range orderBook.Bids {
 		if len(bid) >= 2 {
-			price, _ := decimal.NewFromString(bid[0]) // First element is price
-			size, _ := decimal.NewFromString(bid[1])  // Second element is size
+			price, _ := numerical.NewFromString(bid[0]) // First element is price
+			size, _ := numerical.NewFromString(bid[1])  // Second element is size
 			bids[i] = connector.PriceLevel{Price: price, Quantity: size}
 		}
 	}
@@ -68,8 +68,8 @@ func (p *paradex) FetchOrderBook(symbol portfolio.Asset, instrument connector.In
 	asks := make([]connector.PriceLevel, len(orderBook.Asks))
 	for i, ask := range orderBook.Asks {
 		if len(ask) >= 2 {
-			price, _ := decimal.NewFromString(ask[0]) // First element is price
-			size, _ := decimal.NewFromString(ask[1])  // Second element is size
+			price, _ := numerical.NewFromString(ask[0]) // First element is price
+			size, _ := numerical.NewFromString(ask[1])  // Second element is size
 			asks[i] = connector.PriceLevel{Price: price, Quantity: size}
 		}
 	}
@@ -122,11 +122,11 @@ func (p *paradex) FetchKlines(symbol, interval string, limit int) ([]connector.K
 			Symbol:   symbol,
 			Interval: interval,
 			OpenTime: time.UnixMilli(k.Timestamp),
-			Open:     decimal.NewFromFloat(k.Open),
-			High:     decimal.NewFromFloat(k.High),
-			Low:      decimal.NewFromFloat(k.Low),
-			Close:    decimal.NewFromFloat(k.Close),
-			Volume:   decimal.NewFromFloat(k.Volume),
+			Open:     numerical.NewFromFloat(k.Open),
+			High:     numerical.NewFromFloat(k.High),
+			Low:      numerical.NewFromFloat(k.Low),
+			Close:    numerical.NewFromFloat(k.Close),
+			Volume:   numerical.NewFromFloat(k.Volume),
 		})
 	}
 

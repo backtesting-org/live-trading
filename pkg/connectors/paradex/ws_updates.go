@@ -2,7 +2,7 @@ package paradex
 
 import (
 	"github.com/backtesting-org/kronos-sdk/pkg/types/connector"
-	"github.com/shopspring/decimal"
+	"github.com/backtesting-org/kronos-sdk/pkg/types/kronos/numerical"
 )
 
 func (p *paradex) OrderBookUpdates() <-chan connector.OrderBook {
@@ -116,9 +116,9 @@ func (p *paradex) convertKlineUpdates(out chan<- connector.Kline) {
 				Close:       paradexKline.Close,
 				Volume:      paradexKline.Volume,
 				CloseTime:   paradexKline.CloseTime,
-				QuoteVolume: decimal.Zero,                 // Not available from paradex
+				QuoteVolume: numerical.Zero(),             // Not available from paradex
 				TradeCount:  int(paradexKline.TradeCount), // Convert int64 to int
-				TakerVolume: decimal.Zero,                 // Not available from paradex
+				TakerVolume: numerical.Zero(),             // Not available from paradex
 			}
 
 			select {

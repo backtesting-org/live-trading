@@ -6,11 +6,11 @@ import (
 	"time"
 
 	"github.com/backtesting-org/kronos-sdk/pkg/types/connector"
+	"github.com/backtesting-org/kronos-sdk/pkg/types/kronos/numerical"
 	"github.com/backtesting-org/live-trading/pkg/connectors/paradex/requests"
-	"github.com/shopspring/decimal"
 )
 
-func (p *paradex) PlaceLimitOrder(symbol string, side connector.OrderSide, quantity, price decimal.Decimal) (*connector.OrderResponse, error) {
+func (p *paradex) PlaceLimitOrder(symbol string, side connector.OrderSide, quantity, price numerical.Decimal) (*connector.OrderResponse, error) {
 	orderReq := requests.PlaceOrderParams{
 		Market:    symbol + "-USD-PERP",
 		Side:      string(side), // "BUY" or "SELL"
@@ -33,12 +33,12 @@ func (p *paradex) PlaceLimitOrder(symbol string, side connector.OrderSide, quant
 		Type:      connector.OrderTypeLimit,
 		Quantity:  quantity,
 		Price:     price,
-		FilledQty: decimal.Zero, // Update if fill info is available
-		Timestamp: time.Now(),   // Or resp.CreatedAt if available
+		FilledQty: numerical.Zero(), // Update if fill info is available
+		Timestamp: time.Now(),       // Or resp.CreatedAt if available
 	}, nil
 }
 
-func (p *paradex) PlaceMarketOrder(symbol string, side connector.OrderSide, quantity decimal.Decimal) (*connector.OrderResponse, error) {
+func (p *paradex) PlaceMarketOrder(symbol string, side connector.OrderSide, quantity numerical.Decimal) (*connector.OrderResponse, error) {
 	orderReq := requests.PlaceOrderParams{
 		Market:    symbol,
 		Side:      string(side),
@@ -60,7 +60,7 @@ func (p *paradex) PlaceMarketOrder(symbol string, side connector.OrderSide, quan
 		Side:      side,
 		Type:      connector.OrderTypeMarket,
 		Quantity:  quantity,
-		FilledQty: decimal.Zero,
+		FilledQty: numerical.Zero(),
 		Timestamp: time.Now(),
 	}, nil
 }

@@ -4,17 +4,17 @@ import (
 	"fmt"
 
 	"github.com/backtesting-org/kronos-sdk/pkg/types/connector"
-	"github.com/shopspring/decimal"
+	"github.com/backtesting-org/kronos-sdk/pkg/types/kronos/numerical"
 )
 
-func (b *bybit) PlaceLimitOrder(symbol string, side connector.OrderSide, quantity, price decimal.Decimal) (*connector.OrderResponse, error) {
+func (b *bybit) PlaceLimitOrder(symbol string, side connector.OrderSide, quantity, price numerical.Decimal) (*connector.OrderResponse, error) {
 	if !b.SupportsTradingOperations() {
 		return nil, fmt.Errorf("trading operations not supported")
 	}
 	return b.trading.PlaceLimitOrder(symbol, side, quantity, price)
 }
 
-func (b *bybit) PlaceMarketOrder(symbol string, side connector.OrderSide, quantity decimal.Decimal) (*connector.OrderResponse, error) {
+func (b *bybit) PlaceMarketOrder(symbol string, side connector.OrderSide, quantity numerical.Decimal) (*connector.OrderResponse, error) {
 	if !b.SupportsTradingOperations() {
 		return nil, fmt.Errorf("trading operations not supported")
 	}

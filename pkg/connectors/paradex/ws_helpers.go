@@ -2,13 +2,12 @@ package paradex
 
 import (
 	"github.com/backtesting-org/kronos-sdk/pkg/types/connector"
+	"github.com/backtesting-org/kronos-sdk/pkg/types/kronos/numerical"
 	"github.com/backtesting-org/kronos-sdk/pkg/types/portfolio"
 	"github.com/backtesting-org/live-trading/pkg/connectors/paradex/websocket"
 	padexmodel "github.com/trishtzy/go-paradex/models"
 
 	"strings"
-
-	"github.com/shopspring/decimal"
 )
 
 func (p *paradex) convertOrderBookUpdates(output chan<- connector.OrderBook) {
@@ -55,8 +54,8 @@ func (p *paradex) convertTradeUpdates(output chan<- connector.Trade) {
 			Price:     wsUpdate.Price,
 			Quantity:  wsUpdate.Quantity,
 			Side:      p.convertOrderSide(side),
-			IsMaker:   false,        // paradex doesn't provide this in trade updates
-			Fee:       decimal.Zero, // Not available in WebSocket updates
+			IsMaker:   false,            // paradex doesn't provide this in trade updates
+			Fee:       numerical.Zero(), // Not available in WebSocket updates
 			Timestamp: wsUpdate.Timestamp,
 		}
 

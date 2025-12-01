@@ -5,9 +5,9 @@ import (
 	"time"
 
 	"github.com/backtesting-org/kronos-sdk/pkg/types/connector"
+	"github.com/backtesting-org/kronos-sdk/pkg/types/kronos/numerical"
 	"github.com/backtesting-org/kronos-sdk/pkg/types/portfolio"
 	"github.com/backtesting-org/live-trading/pkg/connectors/types"
-	"github.com/shopspring/decimal"
 )
 
 // FetchKlines retrieves historical candlestick data with decimal precision
@@ -23,27 +23,27 @@ func (h *hyperliquid) FetchKlines(symbol, interval string, limit int) ([]connect
 
 	klines := make([]connector.Kline, 0, len(candles))
 	for _, candle := range candles {
-		open, err := decimal.NewFromString(candle.Open)
+		open, err := numerical.NewFromString(candle.Open)
 		if err != nil {
 			return nil, fmt.Errorf("invalid open price: %w", err)
 		}
 
-		high, err := decimal.NewFromString(candle.High)
+		high, err := numerical.NewFromString(candle.High)
 		if err != nil {
 			return nil, fmt.Errorf("invalid high price: %w", err)
 		}
 
-		low, err := decimal.NewFromString(candle.Low)
+		low, err := numerical.NewFromString(candle.Low)
 		if err != nil {
 			return nil, fmt.Errorf("invalid low price: %w", err)
 		}
 
-		closeVal, err := decimal.NewFromString(candle.Close)
+		closeVal, err := numerical.NewFromString(candle.Close)
 		if err != nil {
 			return nil, fmt.Errorf("invalid close price: %w", err)
 		}
 
-		volume, err := decimal.NewFromString(candle.Volume)
+		volume, err := numerical.NewFromString(candle.Volume)
 		if err != nil {
 			return nil, fmt.Errorf("invalid volume: %w", err)
 		}
@@ -74,7 +74,7 @@ func (h *hyperliquid) FetchPrice(symbol string) (*connector.Price, error) {
 		return nil, fmt.Errorf("price not found for symbol: %s", symbol)
 	}
 
-	price, err := decimal.NewFromString(priceStr)
+	price, err := numerical.NewFromString(priceStr)
 	if err != nil {
 		return nil, fmt.Errorf("invalid price format for %s: %w", symbol, err)
 	}
@@ -118,8 +118,8 @@ func (h *hyperliquid) FetchOrderBook(symbol portfolio.Asset, instrument connecto
 			break
 		}
 
-		price := decimal.NewFromFloat(level.Px)
-		quantity := decimal.NewFromFloat(level.Sz)
+		price := numerical.NewFromFloat(level.Px)
+		quantity := numerical.NewFromFloat(level.Sz)
 
 		orderBook.Bids = append(orderBook.Bids, connector.PriceLevel{
 			Price:    price,
@@ -133,8 +133,8 @@ func (h *hyperliquid) FetchOrderBook(symbol portfolio.Asset, instrument connecto
 			break
 		}
 
-		price := decimal.NewFromFloat(level.Px)
-		quantity := decimal.NewFromFloat(level.Sz)
+		price := numerical.NewFromFloat(level.Px)
+		quantity := numerical.NewFromFloat(level.Sz)
 
 		orderBook.Asks = append(orderBook.Asks, connector.PriceLevel{
 			Price:    price,
@@ -170,7 +170,7 @@ func (h *hyperliquid) FetchRecentTrades(symbol string, limit int) ([]connector.T
 			continue
 		}
 
-		price, err := decimal.NewFromString(fill.Price)
+		price, err := numerical.NewFromString(fill.Price)
 		if err != nil {
 			h.appLogger.Warn("Invalid price in fill",
 				"coin", fill.Coin,
@@ -179,7 +179,7 @@ func (h *hyperliquid) FetchRecentTrades(symbol string, limit int) ([]connector.T
 			continue
 		}
 
-		quantity, err := decimal.NewFromString(fill.Size)
+		quantity, err := numerical.NewFromString(fill.Size)
 		if err != nil {
 			h.appLogger.Warn("Invalid quantity in fill",
 				"coin", fill.Coin,
@@ -195,7 +195,7 @@ func (h *hyperliquid) FetchRecentTrades(symbol string, limit int) ([]connector.T
 			Price:     price,
 			Quantity:  quantity,
 			Side:      connector.FromString(fill.Side),
-			Fee:       decimal.NewFromInt(0),
+			Fee:       numerical.NewFromInt(0),
 			Timestamp: time.Unix(fill.Time/1000, 0),
 		})
 
