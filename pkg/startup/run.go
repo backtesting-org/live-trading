@@ -7,39 +7,48 @@ import (
 	"github.com/backtesting-org/kronos-sdk/pkg/types/connector"
 	"github.com/backtesting-org/kronos-sdk/pkg/types/logging"
 	"github.com/backtesting-org/kronos-sdk/pkg/types/plugin"
+	"github.com/backtesting-org/kronos-sdk/pkg/types/portfolio"
 	"github.com/backtesting-org/kronos-sdk/pkg/types/registry"
 	"github.com/backtesting-org/kronos-sdk/pkg/types/runtime"
 )
 
 type Startup interface {
-	Start(strategyPath string, connectors map[connector.ExchangeName]connector.Config) error
+	Start(
+		strategyPath string,
+		connectors map[connector.ExchangeName]connector.Config,
+		assets map[portfolio.Asset][]connector.Instrument,
+	) error
 }
 
 func NewStartup(
-	registry registry.ConnectorRegistry,
+	connectorRegistry registry.ConnectorRegistry,
+	assetRegistry registry.AssetRegistry,
 	pluginManager plugin.Manager,
 	runtime runtime.Runtime,
 	logger logging.ApplicationLogger,
 ) Startup {
 	return &startup{
-		registry:      registry,
-		runtime:       runtime,
-		pluginManager: pluginManager,
-		logger:        logger,
+		connectorRegistry: connectorRegistry,
+		assetRegistry:     assetRegistry,
+		runtime:           runtime,
+		pluginManager:     pluginManager,
+		logger:            logger,
 	}
 }
 
 type startup struct {
-	registry      registry.ConnectorRegistry
-	pluginManager plugin.Manager
-	runtime       runtime.Runtime
-	logger        logging.ApplicationLogger
+	connectorRegistry registry.ConnectorRegistry
+	assetRegistry     registry.AssetRegistry
+	pluginManager     plugin.Manager
+	runtime           runtime.Runtime
+	logger            logging.ApplicationLogger
 }
 
 // Start runs the trading strategy
 func (r *startup) Start(
 	strategyPath string,
 	connectors map[connector.ExchangeName]connector.Config,
+	assets map[portfolio.Asset][]connector.Instrument,
 ) error {
 	ctx := context.Background()
 
@@ -49,7 +58,7 @@ func (r *startup) Start(
 	}
 
 	for name, config := range connectors {
-		conn, isRegistered := r.registry.GetConnector(name)
+		conn, isRegistered := r.connectorRegistry.GetConnector(name)
 		if !isRegistered {
 			r.logger.Warn(fmt.Sprintf("connector %s is not registered", name))
 		}
@@ -61,9 +70,15 @@ func (r *startup) Start(
 		}
 
 		bootConfig.ConnectorNames = append(bootConfig.ConnectorNames, name)
-		err = r.registry.MarkConnectorReady(name)
+		err = r.connectorRegistry.MarkConnectorReady(name)
 		if err != nil {
 			return err
+		}
+	}
+
+	for asset, instruments := range assets {
+		for _, instr := range instruments {
+			r.assetRegistry.RegisterAsset(asset, instr)
 		}
 	}
 
