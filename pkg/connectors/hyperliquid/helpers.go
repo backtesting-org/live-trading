@@ -3,9 +3,17 @@ package hyperliquid
 import (
 	"fmt"
 	"log"
+	"strings"
 
 	"github.com/backtesting-org/kronos-sdk/pkg/types/kronos/numerical"
+	"github.com/backtesting-org/kronos-sdk/pkg/types/portfolio"
 )
+
+// normaliseAssetName converts an asset symbol to the format Hyperliquid API accepts
+// Examples: "btc" -> "BTC", "BTC" -> "BTC", "Btc" -> "BTC"
+func (h *hyperliquid) normaliseAssetName(asset portfolio.Asset) string {
+	return strings.ToUpper(asset.Symbol())
+}
 
 // extractOrderID extracts order ID from trading service response
 func (h *hyperliquid) extractOrderID(result interface{}) string {

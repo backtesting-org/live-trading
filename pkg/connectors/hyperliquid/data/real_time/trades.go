@@ -7,16 +7,11 @@ import (
 )
 
 func (r *realTimeService) SubscribeToTrades(coin string, callback func([]TradeMessage)) (int, error) {
-	ws, err := r.client.GetWebSocket()
-	if err != nil {
-		return 0, fmt.Errorf("websocket not configured: %w", err)
-	}
-
-	// Wrap the user callback with parsing logic
+	// Wrap the user callback with parsing logic and error handling
 	wrappedCallback := func(msg hyperliquid.WSMessage) {
 		parsed, err := r.parser.ParseTrades(msg)
 		if err != nil {
-			// Parser already logs the error
+			r.logger.Warn("Failed to parse trades message: %v", err)
 			return
 		}
 
@@ -33,14 +28,22 @@ func (r *realTimeService) SubscribeToTrades(coin string, callback func([]TradeMe
 		}
 	}
 
-	return ws.SubscribeToTrades(coin, wrappedCallback)
+	subID, err := r.ws.SubscribeToTrades(coin, wrappedCallback)
+	if err != nil {
+		r.logger.Error("Failed to subscribe to trades %s: %v", coin, err)
+		return 0, fmt.Errorf("failed to subscribe to trades: %w", err)
+	}
+
+	r.logger.Info("Successfully subscribed to trades: %s (ID: %d)", coin, subID)
+	return subID, nil
 }
 
 func (r *realTimeService) UnsubscribeFromTrades(coin string, subscriptionID int) error {
-	ws, err := r.client.GetWebSocket()
-	if err != nil {
-		return fmt.Errorf("websocket not configured: %w", err)
-	}
 	sub := hyperliquid.Subscription{Type: "trades", Coin: coin}
-	return ws.Unsubscribe(sub, subscriptionID)
+	if err := r.ws.Unsubscribe(sub, subscriptionID); err != nil {
+		r.logger.Error("Failed to unsubscribe from trades %s: %v", coin, err)
+		return fmt.Errorf("failed to unsubscribe from trades: %w", err)
+	}
+	r.logger.Info("Successfully unsubscribed from trades: %s", coin)
+	return nil
 }
