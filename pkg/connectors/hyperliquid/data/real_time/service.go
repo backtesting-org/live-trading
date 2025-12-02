@@ -1,7 +1,6 @@
 package real_time
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/backtesting-org/kronos-sdk/pkg/types/logging"
@@ -11,7 +10,7 @@ import (
 
 // RealTimeService interface for WebSocket subscriptions
 type RealTimeService interface {
-	Connect(ctx context.Context) error
+	Connect() error
 	Disconnect() error
 	GetErrorChannel() <-chan error
 
@@ -55,9 +54,9 @@ func NewRealTimeService(
 	}, nil
 }
 
-func (r *realTimeService) Connect(ctx context.Context) error {
+func (r *realTimeService) Connect() error {
 	r.logger.Info("Connecting to WebSocket for real-time data")
-	return r.ws.Connect(ctx)
+	return r.ws.Connect()
 }
 
 func (r *realTimeService) Disconnect() error {

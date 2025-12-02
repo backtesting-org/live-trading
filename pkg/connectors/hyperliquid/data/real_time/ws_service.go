@@ -100,12 +100,16 @@ func NewWebSocketService(
 }
 
 // Connect establishes the WebSocket connection with automatic reconnection
-func (ws *WebSocketService) Connect(ctx context.Context) error {
-	ws.ctx, ws.cancel = context.WithCancel(ctx)
+func (ws *WebSocketService) Connect() error {
+	// Use a background context that we control, don't use the caller's context
+	// This prevents the connection from closing when the caller's context cancels
+	ws.ctx = context.Background()
+	ws.cancel = nil
 
 	ws.logger.Info("🔌 Connecting to WebSocket: %s", ws.connManager.GetState())
 
 	// Connect with circuit breaker
+	// ConnectionManager handles keep-alive internally via simpleHealthMonitor
 	if err := ws.connManager.Connect(ws.ctx); err != nil {
 		ws.logger.Error("❌ Failed to connect to WebSocket: %v", err)
 		return fmt.Errorf("websocket connection failed: %w", err)
@@ -118,10 +122,6 @@ func (ws *WebSocketService) Connect(ctx context.Context) error {
 // Close disconnects the WebSocket
 func (ws *WebSocketService) Close() error {
 	ws.logger.Info("Closing WebSocket connection")
-
-	if ws.cancel != nil {
-		ws.cancel()
-	}
 
 	return ws.connManager.Disconnect()
 }
@@ -505,7 +505,7 @@ func (ws *WebSocketService) handleWebData2Message(data []byte) error {
 
 func (ws *WebSocketService) handleOrderbookMessage(data []byte) error {
 	var msg hyperliquid.WSMessage
-	if err := json.Unmarshal(data, &msg); err != nil {
+	if err := json.Unmarshal(data, &msg.Data); err != nil {
 		ws.logger.Debug("Failed to unmarshal orderbook message: %v", err)
 		return nil
 	}

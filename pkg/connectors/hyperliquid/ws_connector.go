@@ -19,7 +19,7 @@ func (h *hyperliquid) StartWebSocket(ctx context.Context) error {
 	// Start error forwarding from realTime service
 	go h.forwardWebSocketErrors()
 
-	return h.realTime.Connect(ctx)
+	return h.realTime.Connect()
 }
 
 // forwardWebSocketErrors forwards errors from the realTime service to the connector's error channel
