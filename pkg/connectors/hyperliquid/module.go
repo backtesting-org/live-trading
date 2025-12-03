@@ -18,7 +18,6 @@ var Module = fx.Options(
 	fx.Provide(
 		clients.NewExchangeClient,
 		clients.NewInfoClient,
-		clients.NewWebSocketClient,
 		trading.NewTradingService,
 		data.NewMarketDataService,
 		fx.Annotate(

@@ -135,24 +135,71 @@ func (rm *reconnectManager) reconnectLoop(ctx context.Context) {
 		rm.reconnectMutex.Unlock()
 	}()
 
+	rm.logger.Info("🔄 Reconnection loop started - will continuously monitor connection and attempt reconnection on disconnection")
+
+	// Track the previous connection state to detect transitions
+	previousState := rm.connectionManager.GetState()
+
+	// Main monitoring loop - runs forever (until ctx.Done())
+	monitorTicker := time.NewTicker(500 * time.Millisecond)
+	defer monitorTicker.Stop()
+
+	reconnectInProgress := false
+
 	for {
 		select {
 		case <-ctx.Done():
-			rm.logger.Debug("Reconnection cancelled by context")
+			rm.logger.Error("❌ Reconnection loop CANCELLED BY CONTEXT")
 			return
+		case <-monitorTicker.C:
+			currentState := rm.connectionManager.GetState()
+
+			// Only trigger reconnection on state transition from connected → disconnected
+			// AND only if we're not already attempting reconnection
+			if !reconnectInProgress && previousState == StateConnected && currentState != StateConnected {
+				rm.logger.Error("🔴 Connection lost! Detected state transition from %s to %s - starting reconnection attempts", previousState.String(), currentState.String())
+				reconnectInProgress = true
+
+				// Start attempting reconnection
+				if err := rm.attemptReconnection(ctx); err != nil {
+					rm.logger.Error("❌ Reconnection sequence failed: %v", err)
+				}
+				reconnectInProgress = false
+
+				// Wait a bit before checking state again to let connection stabilize
+				time.Sleep(100 * time.Millisecond)
+				previousState = rm.connectionManager.GetState()
+			} else if !reconnectInProgress && currentState != previousState {
+				// Update previousState only when not reconnecting
+				previousState = currentState
+				rm.logger.Debug("📊 Connection state changed to: %s", currentState.String())
+			}
+		}
+	}
+}
+
+// attemptReconnection handles the actual reconnection logic with exponential backoff
+func (rm *reconnectManager) attemptReconnection(ctx context.Context) error {
+	rm.currentAttempt = 0
+
+	for {
+		select {
+		case <-ctx.Done():
+			rm.logger.Error("❌ Reconnection attempt CANCELLED BY CONTEXT after %d attempts", rm.currentAttempt)
+			return fmt.Errorf("context cancelled")
 		default:
 			rm.currentAttempt++
 
 			if rm.currentAttempt > rm.strategy.MaxAttempts() {
-				rm.logger.Error("Max reconnection attempts reached: %d", rm.currentAttempt-1)
+				rm.logger.Error("🛑 Max reconnection attempts reached: %d attempts failed", rm.currentAttempt-1)
 				if rm.onReconnectFail != nil {
 					rm.onReconnectFail(rm.currentAttempt-1, fmt.Errorf("max attempts reached"))
 				}
-				return
+				return fmt.Errorf("max reconnection attempts exceeded")
 			}
 
 			delay := rm.strategy.NextDelay(rm.currentAttempt)
-			rm.logger.Debug("Attempting reconnection %d after %v delay", rm.currentAttempt, delay)
+			rm.logger.Info("🔄 Reconnection attempt #%d after %.1f second delay", rm.currentAttempt, delay.Seconds())
 
 			if rm.onReconnectStart != nil {
 				rm.onReconnectStart(rm.currentAttempt)
@@ -160,20 +207,21 @@ func (rm *reconnectManager) reconnectLoop(ctx context.Context) {
 
 			select {
 			case <-ctx.Done():
-				return
+				rm.logger.Error("❌ Reconnection CANCELLED during delay at attempt %d", rm.currentAttempt)
+				return fmt.Errorf("context cancelled during delay")
 			case <-time.After(delay):
 			}
 
 			err := rm.connectionManager.Connect(ctx)
 			if err == nil {
-				rm.logger.Info("Reconnection successful after %d attempts", rm.currentAttempt)
+				rm.logger.Info("✅ Reconnection successful after %d attempts", rm.currentAttempt)
 				if rm.onReconnectSuccess != nil {
 					rm.onReconnectSuccess(rm.currentAttempt)
 				}
-				return
+				return nil // Successfully reconnected, exit attemptReconnection
 			}
 
-			rm.logger.Debug("Reconnection attempt %d failed: %v", rm.currentAttempt, err)
+			rm.logger.Error("❌ Reconnection attempt #%d failed: %v", rm.currentAttempt, err)
 			if rm.onReconnectFail != nil {
 				rm.onReconnectFail(rm.currentAttempt, err)
 			}

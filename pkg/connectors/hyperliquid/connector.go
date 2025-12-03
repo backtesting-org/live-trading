@@ -18,7 +18,6 @@ import (
 type hyperliquid struct {
 	exchangeClient clients.ExchangeClient
 	infoClient     clients.InfoClient
-	wsClient       clients.WebSocketClient
 	marketData     data.MarketDataService
 	trading        trading.TradingService
 	realTime       real_time.RealTimeService
@@ -50,7 +49,6 @@ var _ connector.WebSocketConnector = (*hyperliquid)(nil)
 func NewHyperliquid(
 	exchangeClient clients.ExchangeClient,
 	infoClient clients.InfoClient,
-	wsClient clients.WebSocketClient,
 	tradingService trading.TradingService,
 	marketDataService data.MarketDataService,
 	realTimeService real_time.RealTimeService,
@@ -61,7 +59,6 @@ func NewHyperliquid(
 	return &hyperliquid{
 		exchangeClient: exchangeClient,
 		infoClient:     infoClient,
-		wsClient:       wsClient,
 		trading:        tradingService,
 		marketData:     marketDataService,
 		realTime:       realTimeService,
@@ -99,10 +96,6 @@ func (h *hyperliquid) Initialize(config connector.Config) error {
 
 	if err := h.infoClient.Configure(hlConfig.BaseURL); err != nil {
 		return fmt.Errorf("failed to configure info client: %w", err)
-	}
-
-	if err := h.wsClient.Configure(hlConfig.BaseURL, hlConfig.PrivateKey); err != nil {
-		return fmt.Errorf("failed to configure websocket client: %w", err)
 	}
 
 	h.config = hlConfig

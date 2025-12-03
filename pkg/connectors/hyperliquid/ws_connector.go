@@ -112,7 +112,9 @@ func (h *hyperliquid) SubscribeOrderBook(asset portfolio.Asset, instrumentType c
 
 		select {
 		case h.orderBookCh <- orderBook:
+			h.appLogger.Debug("📊 Sent orderbook for %s to channel (bids: %d, asks: %d)", symbol, len(bids), len(asks))
 		default:
+			h.appLogger.Warn("⚠️  Orderbook channel FULL for %s - dropping update (channel buffer: 100)", symbol)
 		}
 	})
 	if err != nil {
@@ -318,8 +320,7 @@ func (h *hyperliquid) SubscribeKlines(asset portfolio.Asset, interval string) er
 	symbol := h.normaliseAssetName(asset)
 
 	subID, err := h.realTime.SubscribeToKlines(symbol, interval, func(klineMsg *real_time.KlineMessage) {
-		select {
-		case h.klineCh <- connector.Kline{
+		kline := connector.Kline{
 			Symbol:    symbol,
 			Interval:  klineMsg.Interval,
 			OpenTime:  klineMsg.OpenTime,
@@ -329,8 +330,13 @@ func (h *hyperliquid) SubscribeKlines(asset portfolio.Asset, interval string) er
 			Close:     klineMsg.Close,
 			Volume:    klineMsg.Volume,
 			CloseTime: klineMsg.CloseTime,
-		}:
+		}
+
+		select {
+		case h.klineCh <- kline:
+			h.appLogger.Info("✅ Sent %s %s kline to channel (O:%.2f C:%.2f)", symbol, klineMsg.Interval, klineMsg.Open.InexactFloat64(), klineMsg.Close.InexactFloat64())
 		default:
+			h.appLogger.Warn("⚠️  Kline channel FULL for %s %s - dropping update (buffer: 100)", symbol, klineMsg.Interval)
 		}
 	})
 	if err != nil {

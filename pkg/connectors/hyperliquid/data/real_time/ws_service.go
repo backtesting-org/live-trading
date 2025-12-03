@@ -96,21 +96,26 @@ func NewWebSocketService(
 
 // Connect establishes the WebSocket connection with automatic reconnection
 func (ws *WebSocketService) Connect() error {
-	// Use a background context that we control, don't use the caller's context
-	// This prevents the connection from closing when the caller's context cancels
+	// Create a background context that will NEVER be cancelled
+	// This allows the connection to stay alive independent of caller's context
 	ws.ctx = context.Background()
 	ws.cancel = nil
 
 	ws.logger.Info("🔌 Connecting to WebSocket: %s", ws.connManager.GetState())
 
-	// Connect with circuit breaker
-	// connectionManager handles keep-alive internally via simpleHealthMonitor
+	// Connect - pass a never-cancelling context
 	if err := ws.connManager.Connect(ws.ctx); err != nil {
 		ws.logger.Error("❌ Failed to connect to WebSocket: %v", err)
 		return fmt.Errorf("websocket connection failed: %w", err)
 	}
 
 	ws.logger.Info("✅ WebSocket connected successfully")
+
+	// START the reconnection manager - this is critical!
+	// Without this, the connection will close and never reconnect
+	// StartReconnection spawns a goroutine to watch for disconnections
+	ws.reconnectMgr.StartReconnection(ws.ctx)
+
 	return nil
 }
 
@@ -151,8 +156,8 @@ func (ws *WebSocketService) onConnect() error {
 
 // onDisconnect is called when the connection is lost
 func (ws *WebSocketService) onDisconnect() error {
-	ws.logger.Warn("⚠️  WebSocket disconnected")
-	// Re-subscription will happen on reconnect
+	ws.logger.Error("🔌❌ WebSocket disconnected - connection lost, will attempt reconnection")
+	// Re-subscription will happen on reconnect via resubscribeAll
 	return nil
 }
 
@@ -165,8 +170,14 @@ func (ws *WebSocketService) onMessage(data []byte) error {
 	}
 
 	if err := json.Unmarshal(data, &msgWrapper); err != nil {
-		ws.logger.Debug("Failed to unmarshal message wrapper: %v", err)
+		ws.logger.Warn("❌ Failed to unmarshal message wrapper: %v | Raw: %s", err, string(data))
 		return nil // Don't error on unparseable messages
+	}
+
+	// Handle subscription confirmation messages (no routing needed)
+	if msgWrapper.Channel == "subscriptionResponse" {
+		ws.logger.Info("✅ Subscription confirmed: %s", string(msgWrapper.Data))
+		return nil
 	}
 
 	// Find handler for this channel
@@ -175,14 +186,15 @@ func (ws *WebSocketService) onMessage(data []byte) error {
 	ws.handlersMu.RUnlock()
 
 	if !exists {
-		ws.logger.Debug("No handler for channel: %s", msgWrapper.Channel)
+		ws.logger.Warn("⚠️  No handler registered for channel: '%s'", msgWrapper.Channel)
 		return nil
 	}
+
+	ws.logger.Debug("✅ Routing to handler for channel '%s'", msgWrapper.Channel)
 
 	// Call handler
 	if err := handler(data); err != nil {
 		ws.logger.Warn("Handler error for channel %s: %v", msgWrapper.Channel, err)
-		// Still report error
 		select {
 		case ws.errorCh <- fmt.Errorf("message handler error for %s: %w", msgWrapper.Channel, err):
 		default:
@@ -250,13 +262,6 @@ func (ws *WebSocketService) resubscribeAll() {
 	}
 }
 
-// registerMessageHandler registers a handler for a specific channel
-func (ws *WebSocketService) registerMessageHandler(channel string, handler func([]byte) error) {
-	ws.handlersMu.Lock()
-	defer ws.handlersMu.Unlock()
-	ws.messageHandlers[channel] = handler
-}
-
 // Subscription methods are organized in separate files:
 // - prices.go: SubscribeToOrderBook, UnsubscribeFromOrderBook, SubscribeToKlines, UnsubscribeFromKlines
 // - trades.go: SubscribeToTrades, UnsubscribeFromTrades
@@ -278,7 +283,62 @@ func (ws *WebSocketService) subscribeToChannel(channel, coin, interval string, c
 	ws.subscriptions[subID] = sub
 	ws.subscriptionsMu.Unlock()
 
+	// Register message handler for this channel if not already registered
+	ws.handlersMu.Lock()
+	if _, exists := ws.messageHandlers[channel]; !exists {
+		ws.messageHandlers[channel] = func(data []byte) error {
+			return ws.routeMessageToSubscriptions(channel, data)
+		}
+	}
+	ws.handlersMu.Unlock()
+
 	return subID, ws.sendSubscription(channel, coin, interval)
+}
+
+// routeMessageToSubscriptions routes incoming messages to all subscriptions on that channel
+func (ws *WebSocketService) routeMessageToSubscriptions(channel string, data []byte) error {
+	var msgWrapper struct {
+		Channel string          `json:"channel"`
+		Data    json.RawMessage `json:"data"`
+	}
+
+	if err := json.Unmarshal(data, &msgWrapper); err != nil {
+		ws.logger.Warn("Failed to unmarshal message for routing: %v", err)
+		return nil
+	}
+
+	// Parse as hyperliquid.WSMessage
+	msg := hyperliquid.WSMessage{
+		Channel: msgWrapper.Channel,
+		Data:    msgWrapper.Data,
+	}
+
+	// Call all subscribed callbacks for this channel
+	ws.subscriptionsMu.RLock()
+	totalSubs := len(ws.subscriptions)
+	matchingCallbacks := 0
+
+	for subID, sub := range ws.subscriptions {
+		if sub.Channel == channel {
+			matchingCallbacks++
+			if sub.Callback != nil {
+				ws.subscriptionsMu.RUnlock()
+				sub.Callback(msg)
+				ws.subscriptionsMu.RLock()
+			} else {
+				ws.logger.Warn("⚠️  Subscription #%d has nil callback for channel %s", subID, channel)
+			}
+		}
+	}
+	ws.subscriptionsMu.RUnlock()
+
+	if matchingCallbacks == 0 {
+		ws.logger.Warn("⚠️  No subscriptions found for channel '%s' (total: %d)", channel, totalSubs)
+	} else {
+		ws.logger.Debug("📊 Routed '%s' message to %d subscriptions", channel, matchingCallbacks)
+	}
+
+	return nil
 }
 
 // sendSubscription sends a subscription message to Hyperliquid
@@ -409,9 +469,9 @@ func (ws *WebSocketService) handleCandleMessage(data []byte) error {
 	return nil
 }
 
-// Disconnect closes the connection
+// Disconnect closes the connection explicitly
 func (ws *WebSocketService) Disconnect() error {
-	ws.logger.Info("Disconnecting from WebSocket")
+	ws.logger.Info("🛑 Explicit disconnect requested from user")
 	return ws.connManager.Disconnect()
 }
 

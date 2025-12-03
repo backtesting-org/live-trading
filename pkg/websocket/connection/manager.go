@@ -333,55 +333,72 @@ func (cm *connectionManager) updateLastActivity() {
 func (cm *connectionManager) readMessages() {
 	defer func() {
 		if r := recover(); r != nil {
-			cm.logger.Error("WebSocket read panic: %v", r)
+			cm.logger.Error("🔥 WebSocket read panic: %v", r)
 			cm.handleConnectionError()
 		}
 	}()
 
+	messageCount := 0
+	cm.logger.Info("🚀 Starting readMessages loop for %s", cm.config.URL)
+
+	// Use context-based cancellation instead of read timeouts
+	// This keeps the connection alive while waiting for messages
 	for {
 		select {
 		case <-cm.ctx.Done():
-			cm.logger.Debug("WebSocket read loop cancelled by context")
+			cm.logger.Error("❌ WebSocket read loop CANCELLED BY CONTEXT (received %d messages before cancel)", messageCount)
 			return
 		default:
-			if cm.GetState() != StateConnected {
-				time.Sleep(100 * time.Millisecond)
-				continue
+		}
+
+		if cm.GetState() != StateConnected {
+			cm.logger.Debug("⏸️  State is %s, sleeping 100ms", cm.GetState().String())
+			time.Sleep(100 * time.Millisecond)
+			continue
+		}
+
+		// Set a long read deadline mainly for detecting truly dead connections
+		// NOT for timing out while waiting for data
+		// The health monitor will detect stale connections separately
+		if err := cm.conn.SetReadDeadline(time.Now().Add(5 * time.Minute)); err != nil {
+			cm.logger.Error("❌ Failed to set read deadline: %v (after %d messages)", err, messageCount)
+			cm.handleConnectionError()
+			return
+		}
+
+		cm.logger.Debug("🔄 Loop #%d: Waiting for message...", messageCount+1)
+		_, message, err := cm.conn.ReadMessage()
+
+		if err != nil {
+			if websocket.IsCloseError(err, websocket.CloseNormalClosure, websocket.CloseGoingAway) {
+				cm.logger.Info("⚠️  WebSocket closed normally by server (received %d messages)", messageCount)
+			} else {
+				cm.logger.Error("❌ WebSocket read error after %d messages: %v (type: %T)", messageCount, err, err)
 			}
 
-			if err := cm.conn.SetReadDeadline(time.Now().Add(cm.config.ReadTimeout)); err != nil {
-				cm.logger.Error("Failed to set read deadline: %v", err)
-				cm.handleConnectionError()
-				return
-			}
+			cm.handleConnectionError()
+			return
+		}
 
-			_, message, err := cm.conn.ReadMessage()
-			if err != nil {
-				if websocket.IsCloseError(err, websocket.CloseNormalClosure, websocket.CloseGoingAway) {
-					cm.logger.Info("WebSocket closed normally")
-				} else {
-					cm.logger.Error("WebSocket read error: %v", err)
+		messageCount++
+		cm.logger.Info("📥 Message #%d received (%d bytes)", messageCount, len(message))
+
+		// Update activity on any message received
+		cm.updateLastActivity()
+
+		if cm.metrics != nil {
+			cm.metrics.IncrementReceived()
+		}
+
+		if cm.onMessage != nil {
+			cm.logger.Debug("📥 Message #%d: Calling onMessage callback...", messageCount)
+			if err := cm.onMessage(message); err != nil {
+				cm.logger.Debug("⚠️  Message #%d handler error: %v", messageCount, err)
+				if cm.onError != nil {
+					cm.onError(fmt.Errorf("message processing error: %w", err))
 				}
-
-				cm.handleConnectionError()
-				return
 			}
-
-			// Update activity on any message received
-			cm.updateLastActivity()
-
-			if cm.metrics != nil {
-				cm.metrics.IncrementReceived()
-			}
-
-			if cm.onMessage != nil {
-				if err := cm.onMessage(message); err != nil {
-					cm.logger.Debug("Message handler error: %v", err)
-					if cm.onError != nil {
-						cm.onError(fmt.Errorf("message processing error: %w", err))
-					}
-				}
-			}
+			cm.logger.Debug("📥 Message #%d: onMessage callback complete", messageCount)
 		}
 	}
 }
@@ -432,7 +449,7 @@ func (cm *connectionManager) handleConnectionError() {
 	cm.setState(StateDisconnected)
 	cm.stateMutex.Unlock()
 
-	cm.logger.Debug("WebSocket connection error detected, previous state: %s", previousState.String())
+	cm.logger.Error("❌ WebSocket connection error detected (was %s, now disconnected)", previousState.String())
 
 	if cm.conn != nil {
 		cm.conn.Close()
