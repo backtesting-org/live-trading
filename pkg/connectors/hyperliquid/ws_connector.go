@@ -48,33 +48,8 @@ func (h *hyperliquid) IsWebSocketConnected() bool {
 	return h.initialized && h.realTime != nil
 }
 
-// OrderBookUpdates returns a channel for order book updates
-// DEPRECATED: Use GetAllOrderBookChannels() instead for proper per-asset routing
-func (h *hyperliquid) OrderBookUpdates() <-chan connector.OrderBook {
-	h.appLogger.Warn("⚠️  OrderBookUpdates() is deprecated - use GetAllOrderBookChannels() for proper routing")
-	// Return nil to force migration to new method
-	return nil
-}
-
-// GetOrderBookChannel returns the channel for a specific asset subscription
-func (h *hyperliquid) GetOrderBookChannel(asset portfolio.Asset) <-chan connector.OrderBook {
-	symbol := h.normaliseAssetName(asset)
-
-	h.orderBookMu.RLock()
-	defer h.orderBookMu.RUnlock()
-
-	ch, exists := h.orderBookChannels[symbol]
-	if !exists {
-		h.appLogger.Error("❌ No orderbook channel found for %s", symbol)
-		return nil
-	}
-
-	h.appLogger.Info("📊 Returning orderbook channel %p for %s", ch, symbol)
-	return ch
-}
-
-// GetAllOrderBookChannels returns all active orderbook channels (for ingestor to read from all)
-func (h *hyperliquid) GetAllOrderBookChannels() map[string]<-chan connector.OrderBook {
+// GetOrderBookChannels returns all active orderbook channels
+func (h *hyperliquid) GetOrderBookChannels() map[string]<-chan connector.OrderBook {
 	h.orderBookMu.RLock()
 	defer h.orderBookMu.RUnlock()
 
@@ -102,34 +77,8 @@ func (h *hyperliquid) AccountBalanceUpdates() <-chan connector.AccountBalance {
 	return h.balanceCh
 }
 
-// KlineUpdates returns a channel for kline/candlestick updates
-func (h *hyperliquid) KlineUpdates() <-chan connector.Kline {
-	// This method is deprecated - use GetKlineChannel instead
-	// Return nil to force users to use the new method
-	h.appLogger.Warn("⚠️  KlineUpdates() is deprecated - use connector-specific channel access")
-	return nil
-}
-
-// GetKlineChannel returns the channel for a specific asset/interval subscription
-func (h *hyperliquid) GetKlineChannel(asset portfolio.Asset, interval string) <-chan connector.Kline {
-	symbol := h.normaliseAssetName(asset)
-	channelKey := fmt.Sprintf("%s:%s", symbol, interval)
-
-	h.klineMu.RLock()
-	defer h.klineMu.RUnlock()
-
-	ch, exists := h.klineChannels[channelKey]
-	if !exists {
-		h.appLogger.Error("❌ No kline channel found for %s", channelKey)
-		return nil
-	}
-
-	h.appLogger.Info("📊 Returning kline channel %p for %s", ch, channelKey)
-	return ch
-}
-
-// GetAllKlineChannels returns all active kline channels (for ingestor to read from all)
-func (h *hyperliquid) GetAllKlineChannels() map[string]<-chan connector.Kline {
+// GetKlineChannels returns all active kline channels
+func (h *hyperliquid) GetKlineChannels() map[string]<-chan connector.Kline {
 	h.klineMu.RLock()
 	defer h.klineMu.RUnlock()
 
