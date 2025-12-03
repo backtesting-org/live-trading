@@ -6,68 +6,132 @@ import (
 	"github.com/sonirico/go-hyperliquid"
 )
 
-func (r *realTimeService) SubscribeToOrderBook(coin string, callback func(*OrderBookMessage)) (int, error) {
-	// Wrap the user callback with parsing logic and error handling
-	wrappedCallback := func(msg hyperliquid.WSMessage) {
-		parsed, err := r.parser.ParseOrderBook(msg)
+// SubscribeToOrderBook subscribes to orderbook updates for a coin
+func (ws *WebSocketService) SubscribeToOrderBook(coin string, callback func(*OrderBookMessage)) (int, error) {
+	if callback == nil {
+		return 0, fmt.Errorf("callback cannot be nil")
+	}
+
+	subID := generateSubscriptionID()
+
+	// Store the parsed callback
+	ws.orderBookMu.Lock()
+	ws.orderBookCallbacks[subID] = callback
+	ws.orderBookMu.Unlock()
+
+	// Subscribe to raw message with parsing wrapper
+	rawSubID, err := ws.subscribeToChannel("l2Book", coin, "", func(msg hyperliquid.WSMessage) {
+		parsed, err := ws.parseOrderBook(msg)
 		if err != nil {
-			r.logger.Warn("Failed to parse orderbook message: %v", err)
+			ws.logger.Warn("Failed to parse orderbook: %v", err)
 			return
 		}
-		if parsed.Coin == coin {
-			callback(parsed)
+
+		ws.orderBookMu.RLock()
+		cb, exists := ws.orderBookCallbacks[subID]
+		ws.orderBookMu.RUnlock()
+
+		if exists && cb != nil {
+			cb(parsed)
 		}
-	}
+	})
 
-	subID, err := r.ws.SubscribeToOrderbook(coin, wrappedCallback)
 	if err != nil {
-		r.logger.Error("Failed to subscribe to orderbook %s: %v", coin, err)
-		return 0, fmt.Errorf("failed to subscribe to orderbook: %w", err)
+		ws.orderBookMu.Lock()
+		delete(ws.orderBookCallbacks, subID)
+		ws.orderBookMu.Unlock()
+		return 0, err
 	}
 
-	r.logger.Info("Successfully subscribed to orderbook: %s (ID: %d)", coin, subID)
+	// Map parsed ID to raw ID for unsubscribe
+	ws.subscriptionsMu.Lock()
+	ws.subscriptions[rawSubID].ID = subID
+	ws.subscriptionsMu.Unlock()
+
+	ws.logger.Info("✅ Subscribed to orderbook for %s (ID: %d)", coin, subID)
 	return subID, nil
 }
 
-func (r *realTimeService) SubscribeToKlines(coin, interval string, callback func(*KlineMessage)) (int, error) {
-	// Wrap the user callback with parsing logic and error handling
-	wrappedCallback := func(msg hyperliquid.WSMessage) {
-		parsed, err := r.parser.ParseKline(msg)
+// UnsubscribeFromOrderBook unsubscribes from orderbook updates
+func (ws *WebSocketService) UnsubscribeFromOrderBook(coin string, subscriptionID int) error {
+	ws.orderBookMu.Lock()
+	delete(ws.orderBookCallbacks, subscriptionID)
+	ws.orderBookMu.Unlock()
+
+	// Find and remove the subscription
+	ws.subscriptionsMu.Lock()
+	for rawID, sub := range ws.subscriptions {
+		if sub.ID == subscriptionID && sub.Channel == "l2Book" && sub.Coin == coin {
+			delete(ws.subscriptions, rawID)
+			ws.subscriptionsMu.Unlock()
+			ws.logger.Info("Unsubscribed from orderbook for %s (ID: %d)", coin, subscriptionID)
+			return nil
+		}
+	}
+	ws.subscriptionsMu.Unlock()
+
+	return fmt.Errorf("subscription not found")
+}
+
+// SubscribeToKlines subscribes to kline updates
+func (ws *WebSocketService) SubscribeToKlines(coin, interval string, callback func(*KlineMessage)) (int, error) {
+	if callback == nil {
+		return 0, fmt.Errorf("callback cannot be nil")
+	}
+
+	subID := generateSubscriptionID()
+
+	ws.klinesMu.Lock()
+	ws.klinesCallbacks[subID] = callback
+	ws.klinesMu.Unlock()
+
+	rawSubID, err := ws.subscribeToChannel("candle", coin, interval, func(msg hyperliquid.WSMessage) {
+		parsed, err := ws.parseKline(msg)
 		if err != nil {
-			r.logger.Warn("Failed to parse kline message: %v", err)
+			ws.logger.Warn("Failed to parse kline: %v", err)
 			return
 		}
-		if parsed.Coin == coin {
-			callback(parsed)
+
+		ws.klinesMu.RLock()
+		cb, exists := ws.klinesCallbacks[subID]
+		ws.klinesMu.RUnlock()
+
+		if exists && cb != nil {
+			cb(parsed)
 		}
-	}
+	})
 
-	subID, err := r.ws.SubscribeToCandles(coin, interval, wrappedCallback)
 	if err != nil {
-		r.logger.Error("Failed to subscribe to klines %s %s: %v", coin, interval, err)
-		return 0, fmt.Errorf("failed to subscribe to klines: %w", err)
+		ws.klinesMu.Lock()
+		delete(ws.klinesCallbacks, subID)
+		ws.klinesMu.Unlock()
+		return 0, err
 	}
 
-	r.logger.Info("Successfully subscribed to klines: %s %s (ID: %d)", coin, interval, subID)
+	ws.subscriptionsMu.Lock()
+	ws.subscriptions[rawSubID].ID = subID
+	ws.subscriptionsMu.Unlock()
+
+	ws.logger.Info("📈 Subscribed to klines for %s %s (ID: %d)", coin, interval, subID)
 	return subID, nil
 }
 
-func (r *realTimeService) UnsubscribeFromOrderBook(coin string, subscriptionID int) error {
-	sub := hyperliquid.Subscription{Type: "l2Book", Coin: coin}
-	if err := r.ws.Unsubscribe(sub, subscriptionID); err != nil {
-		r.logger.Error("Failed to unsubscribe from orderbook %s: %v", coin, err)
-		return fmt.Errorf("failed to unsubscribe from orderbook: %w", err)
-	}
-	r.logger.Info("Successfully unsubscribed from orderbook: %s", coin)
-	return nil
-}
+// UnsubscribeFromKlines unsubscribes from kline updates
+func (ws *WebSocketService) UnsubscribeFromKlines(coin, interval string, subscriptionID int) error {
+	ws.klinesMu.Lock()
+	delete(ws.klinesCallbacks, subscriptionID)
+	ws.klinesMu.Unlock()
 
-func (r *realTimeService) UnsubscribeFromKlines(coin, interval string, subscriptionID int) error {
-	sub := hyperliquid.Subscription{Type: "candle", Coin: coin, Interval: interval}
-	if err := r.ws.Unsubscribe(sub, subscriptionID); err != nil {
-		r.logger.Error("Failed to unsubscribe from klines %s %s: %v", coin, interval, err)
-		return fmt.Errorf("failed to unsubscribe from klines: %w", err)
+	ws.subscriptionsMu.Lock()
+	for rawID, sub := range ws.subscriptions {
+		if sub.ID == subscriptionID && sub.Channel == "candle" && sub.Coin == coin && sub.Interval == interval {
+			delete(ws.subscriptions, rawID)
+			ws.subscriptionsMu.Unlock()
+			ws.logger.Info("Unsubscribed from klines for %s %s (ID: %d)", coin, interval, subscriptionID)
+			return nil
+		}
 	}
-	r.logger.Info("Successfully unsubscribed from klines: %s %s", coin, interval)
-	return nil
+	ws.subscriptionsMu.Unlock()
+
+	return fmt.Errorf("subscription not found")
 }

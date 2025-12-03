@@ -14,7 +14,6 @@ type Metrics interface {
 
 // CircuitBreaker defines circuit breaker operations
 type CircuitBreaker interface {
-	Call(fn func() error) error
 	Execute(fn func() error) error
 	GetState() string
 }

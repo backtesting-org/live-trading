@@ -6,6 +6,31 @@ import (
 	"github.com/backtesting-org/kronos-sdk/pkg/types/kronos/numerical"
 )
 
+// RealTimeService defines the WebSocket interface for real-time market data
+type RealTimeService interface {
+	Connect() error
+	Disconnect() error
+	GetErrorChannel() <-chan error
+
+	// Orderbook subscriptions
+	SubscribeToOrderBook(coin string, callback func(*OrderBookMessage)) (int, error)
+	UnsubscribeFromOrderBook(coin string, subscriptionID int) error
+
+	// Trade subscriptions
+	SubscribeToTrades(coin string, callback func([]TradeMessage)) (int, error)
+	UnsubscribeFromTrades(coin string, subscriptionID int) error
+
+	// Position subscriptions
+	SubscribeToPositions(user string, callback func(*PositionMessage)) (int, error)
+
+	// Account balance subscriptions
+	SubscribeToAccountBalance(user string, callback func(*AccountBalanceMessage)) (int, error)
+
+	// Kline subscriptions
+	SubscribeToKlines(coin, interval string, callback func(*KlineMessage)) (int, error)
+	UnsubscribeFromKlines(coin, interval string, subscriptionID int) error
+}
+
 // OrderBookMessage represents a parsed L2 order book update from WebSocket
 type OrderBookMessage struct {
 	Coin      string

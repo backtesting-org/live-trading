@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/backtesting-org/live-trading/pkg/websocket/security"
+	"github.com/backtesting-org/kronos-sdk/pkg/types/logging"
 )
 
 type exponentialBackoffStrategy struct {
@@ -73,7 +73,7 @@ func (ebs *exponentialBackoffStrategy) Reset() {
 type reconnectManager struct {
 	connectionManager ConnectionManager
 	strategy          ReconnectionStrategy
-	logger            security.Logger
+	logger            logging.ApplicationLogger
 
 	isReconnecting bool
 	reconnectMutex sync.Mutex
@@ -87,7 +87,7 @@ type reconnectManager struct {
 func NewReconnectManager(
 	connectionManager ConnectionManager,
 	strategy ReconnectionStrategy,
-	logger security.Logger,
+	logger logging.ApplicationLogger,
 ) ReconnectManager {
 	return &reconnectManager{
 		connectionManager: connectionManager,

@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/backtesting-org/kronos-sdk/pkg/types/logging"
 	"github.com/backtesting-org/live-trading/pkg/websocket/performance"
 	"github.com/backtesting-org/live-trading/pkg/websocket/security"
 	"github.com/gorilla/websocket"
@@ -46,7 +47,7 @@ type connectionManager struct {
 	authManager    security.AuthManager
 	metrics        performance.Metrics
 	circuitBreaker performance.CircuitBreaker
-	logger         security.Logger
+	logger         logging.ApplicationLogger
 
 	conn       *websocket.Conn
 	state      ConnectionState
@@ -68,7 +69,7 @@ func NewConnectionManager(
 	config Config,
 	authManager security.AuthManager,
 	metrics performance.Metrics,
-	logger security.Logger,
+	logger logging.ApplicationLogger,
 ) ConnectionManager {
 	return &connectionManager{
 		config:         config,
@@ -103,7 +104,7 @@ func (cm *connectionManager) Connect(ctx context.Context) error {
 	cm.setState(StateConnecting)
 	cm.ctx, cm.cancel = context.WithCancel(ctx)
 
-	return cm.circuitBreaker.Call(func() error {
+	return cm.circuitBreaker.Execute(func() error {
 		return cm.doConnect()
 	})
 }

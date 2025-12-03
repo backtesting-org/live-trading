@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"sync"
-	"time"
 
 	"github.com/backtesting-org/kronos-sdk/pkg/types/logging"
 	"github.com/backtesting-org/live-trading/pkg/websocket/base"
@@ -15,10 +14,11 @@ import (
 
 // WebSocketService manages the WebSocket connection using the robust pkg/websocket infrastructure
 type WebSocketService struct {
-	connManager  *connection.connectionManager
-	reconnectMgr *connection.reconnectManager
-	baseService  *base.baseService
+	connManager  connection.ConnectionManager
+	reconnectMgr connection.ReconnectManager
+	baseService  base.BaseService
 	logger       logging.ApplicationLogger
+	parser       MessageParser
 
 	// Subscription tracking
 	subscriptionsMu sync.RWMutex
@@ -27,6 +27,14 @@ type WebSocketService struct {
 	// Message routing
 	messageHandlers map[string]func([]byte) error // Channel -> handler
 	handlersMu      sync.RWMutex
+
+	// Parsed callbacks
+	orderBookCallbacks map[int]func(*OrderBookMessage)
+	orderBookMu        sync.RWMutex
+	tradesCallbacks    map[int]func([]TradeMessage)
+	tradesMu           sync.RWMutex
+	klinesCallbacks    map[int]func(*KlineMessage)
+	klinesMu           sync.RWMutex
 
 	// Error channel
 	errorCh chan error
@@ -46,35 +54,38 @@ type SubscriptionHandler struct {
 }
 
 // NewWebSocketService creates a new WebSocket service using pkg/websocket infrastructure
+// All dependencies are injected via DI - no instantiation with new()
 func NewWebSocketService(
-	baseService *base.baseService,
+	connManager connection.ConnectionManager,
+	reconnectMgr connection.ReconnectManager,
+	baseService base.BaseService,
 	logger logging.ApplicationLogger,
-) (*WebSocketService, error) {
+	parser MessageParser,
+) (RealTimeService, error) {
 	ws := &WebSocketService{
-		baseService:     baseService,
-		logger:          logger,
-		subscriptions:   make(map[int]*SubscriptionHandler),
-		messageHandlers: make(map[string]func([]byte) error),
-		errorCh:         make(chan error, 100),
+		connManager:        connManager,
+		reconnectMgr:       reconnectMgr,
+		baseService:        baseService,
+		logger:             logger,
+		parser:             parser,
+		subscriptions:      make(map[int]*SubscriptionHandler),
+		messageHandlers:    make(map[string]func([]byte) error),
+		orderBookCallbacks: make(map[int]func(*OrderBookMessage)),
+		tradesCallbacks:    make(map[int]func([]TradeMessage)),
+		klinesCallbacks:    make(map[int]func(*KlineMessage)),
+		errorCh:            make(chan error, 100),
 	}
 
 	// Set up connection manager callbacks
-	baseService.connManager.SetCallbacks(
+	connManager.SetCallbacks(
 		ws.onConnect,
 		ws.onDisconnect,
 		ws.onMessage,
 		ws.onError,
 	)
 
-	// Create and set up reconnection manager
-	reconnectStrategy := connection.NewExponentialBackoffStrategy(
-		5*time.Second,  // Initial delay
-		60*time.Second, // Max delay
-		10,             // Max attempts
-	)
-
-	ws.reconnectMgr = connection.NewReconnectManager(baseService.connManager, reconnectStrategy, logger)
-	ws.reconnectMgr.SetCallbacks(
+	// Set up reconnection manager callbacks
+	reconnectMgr.SetCallbacks(
 		ws.onReconnectStart,
 		ws.onReconnectFail,
 		ws.onReconnectSuccess,
@@ -139,9 +150,10 @@ func (ws *WebSocketService) onConnect() error {
 }
 
 // onDisconnect is called when the connection is lost
-func (ws *WebSocketService) onDisconnect() {
+func (ws *WebSocketService) onDisconnect() error {
 	ws.logger.Warn("⚠️  WebSocket disconnected")
 	// Re-subscription will happen on reconnect
+	return nil
 }
 
 // onMessage processes incoming WebSocket messages
@@ -245,239 +257,91 @@ func (ws *WebSocketService) registerMessageHandler(channel string, handler func(
 	ws.messageHandlers[channel] = handler
 }
 
-// SubscribeToOrderbook subscribes to orderbook updates
-func (ws *WebSocketService) SubscribeToOrderbook(coin string, callback func(hyperliquid.WSMessage)) (int, error) {
-	if !ws.IsConnected() {
-		return 0, fmt.Errorf("websocket not connected")
-	}
+// Subscription methods are organized in separate files:
+// - prices.go: SubscribeToOrderBook, UnsubscribeFromOrderBook, SubscribeToKlines, UnsubscribeFromKlines
+// - trades.go: SubscribeToTrades, UnsubscribeFromTrades
+// - account.go: SubscribeToPositions, SubscribeToAccountBalance
 
-	// Generate subscription ID
+// subscribeToChannel is the internal method that handles raw subscriptions
+func (ws *WebSocketService) subscribeToChannel(channel, coin, interval string, callback func(hyperliquid.WSMessage)) (int, error) {
 	subID := generateSubscriptionID()
 
-	// Track subscription
-	ws.subscriptionsMu.Lock()
-	ws.subscriptions[subID] = &SubscriptionHandler{
+	sub := &SubscriptionHandler{
 		ID:       subID,
-		Channel:  "l2Book",
-		Coin:     coin,
-		Callback: callback,
-	}
-	ws.subscriptionsMu.Unlock()
-
-	// Register message handler if not already registered
-	ws.handlersMu.Lock()
-	if _, exists := ws.messageHandlers["l2Book"]; !exists {
-		ws.messageHandlers["l2Book"] = func(data []byte) error {
-			return ws.handleOrderbookMessage(data)
-		}
-	}
-	ws.handlersMu.Unlock()
-
-	// Send subscription request to server
-	sub := hyperliquid.Subscription{Type: "l2Book", Coin: coin}
-	subMsg := map[string]interface{}{
-		"method": "subscribe",
-		"subscription": map[string]interface{}{
-			"type": sub.Type,
-			"coin": sub.Coin,
-		},
-	}
-
-	if err := ws.connManager.SendJSON(subMsg); err != nil {
-		ws.logger.Error("Failed to send subscription request: %v", err)
-		// Remove from tracking on error
-		ws.subscriptionsMu.Lock()
-		delete(ws.subscriptions, subID)
-		ws.subscriptionsMu.Unlock()
-		return 0, fmt.Errorf("failed to subscribe to orderbook: %w", err)
-	}
-
-	ws.logger.Info("📊 Subscribed to orderbook: %s (subID: %d)", coin, subID)
-	return subID, nil
-}
-
-// SubscribeToTrades subscribes to trade updates
-func (ws *WebSocketService) SubscribeToTrades(coin string, callback func(hyperliquid.WSMessage)) (int, error) {
-	if !ws.IsConnected() {
-		return 0, fmt.Errorf("websocket not connected")
-	}
-
-	subID := generateSubscriptionID()
-
-	ws.subscriptionsMu.Lock()
-	ws.subscriptions[subID] = &SubscriptionHandler{
-		ID:       subID,
-		Channel:  "trades",
-		Coin:     coin,
-		Callback: callback,
-	}
-	ws.subscriptionsMu.Unlock()
-
-	ws.handlersMu.Lock()
-	if _, exists := ws.messageHandlers["trades"]; !exists {
-		ws.messageHandlers["trades"] = func(data []byte) error {
-			return ws.handleTradesMessage(data)
-		}
-	}
-	ws.handlersMu.Unlock()
-
-	sub := hyperliquid.Subscription{Type: "trades", Coin: coin}
-	subMsg := map[string]interface{}{
-		"method": "subscribe",
-		"subscription": map[string]interface{}{
-			"type": sub.Type,
-			"coin": sub.Coin,
-		},
-	}
-
-	if err := ws.connManager.SendJSON(subMsg); err != nil {
-		ws.subscriptionsMu.Lock()
-		delete(ws.subscriptions, subID)
-		ws.subscriptionsMu.Unlock()
-		return 0, fmt.Errorf("failed to subscribe to trades: %w", err)
-	}
-
-	ws.logger.Info("🔄 Subscribed to trades: %s (subID: %d)", coin, subID)
-	return subID, nil
-}
-
-// SubscribeToCandles subscribes to candle/kline updates
-func (ws *WebSocketService) SubscribeToCandles(coin, interval string, callback func(hyperliquid.WSMessage)) (int, error) {
-	if !ws.IsConnected() {
-		return 0, fmt.Errorf("websocket not connected")
-	}
-
-	subID := generateSubscriptionID()
-
-	ws.subscriptionsMu.Lock()
-	ws.subscriptions[subID] = &SubscriptionHandler{
-		ID:       subID,
-		Channel:  "candle",
+		Channel:  channel,
 		Coin:     coin,
 		Interval: interval,
 		Callback: callback,
 	}
+
+	ws.subscriptionsMu.Lock()
+	ws.subscriptions[subID] = sub
 	ws.subscriptionsMu.Unlock()
 
-	ws.handlersMu.Lock()
-	if _, exists := ws.messageHandlers["candle"]; !exists {
-		ws.messageHandlers["candle"] = func(data []byte) error {
-			return ws.handleCandleMessage(data)
-		}
-	}
-	ws.handlersMu.Unlock()
+	return subID, ws.sendSubscription(channel, coin, interval)
+}
 
-	sub := hyperliquid.Subscription{Type: "candle", Coin: coin, Interval: interval}
+// sendSubscription sends a subscription message to Hyperliquid
+func (ws *WebSocketService) sendSubscription(channel, coin, interval string) error {
 	subMsg := map[string]interface{}{
 		"method": "subscribe",
 		"subscription": map[string]interface{}{
-			"type":     sub.Type,
-			"coin":     sub.Coin,
-			"interval": sub.Interval,
+			"type": channel,
+			"coin": coin,
 		},
 	}
 
-	if err := ws.connManager.SendJSON(subMsg); err != nil {
-		ws.subscriptionsMu.Lock()
-		delete(ws.subscriptions, subID)
-		ws.subscriptionsMu.Unlock()
-		return 0, fmt.Errorf("failed to subscribe to candles: %w", err)
+	if interval != "" {
+		subMsg["subscription"].(map[string]interface{})["interval"] = interval
 	}
 
-	ws.logger.Info("📈 Subscribed to candles: %s %s (subID: %d)", coin, interval, subID)
-	return subID, nil
+	data, err := json.Marshal(subMsg)
+	if err != nil {
+		return fmt.Errorf("failed to marshal subscription: %w", err)
+	}
+
+	return ws.connManager.Send(data)
 }
 
-// Unsubscribe unsubscribes from a subscription
-func (ws *WebSocketService) Unsubscribe(sub hyperliquid.Subscription, subID int) error {
-	ws.subscriptionsMu.Lock()
-	_, exists := ws.subscriptions[subID]
-	if exists {
-		delete(ws.subscriptions, subID)
-	}
-	ws.subscriptionsMu.Unlock()
+// Parsing helper functions that use the injected parser
 
-	if !exists {
-		return fmt.Errorf("subscription %d not found", subID)
-	}
-
-	unsubMsg := map[string]interface{}{
-		"method": "unsubscribe",
-		"subscription": map[string]interface{}{
-			"type": sub.Type,
-			"coin": sub.Coin,
-		},
-	}
-
-	if sub.Interval != "" {
-		unsubMsg["subscription"].(map[string]interface{})["interval"] = sub.Interval
-	}
-
-	if err := ws.connManager.SendJSON(unsubMsg); err != nil {
-		ws.logger.Error("Failed to send unsubscription request: %v", err)
-		return fmt.Errorf("failed to unsubscribe: %w", err)
-	}
-
-	ws.logger.Info("Unsubscribed from %s (subID: %d)", sub.Type, subID)
-	return nil
+func (ws *WebSocketService) parseOrderBook(msg hyperliquid.WSMessage) (*OrderBookMessage, error) {
+	return ws.parser.ParseOrderBook(msg)
 }
 
-// SubscribeToWebData subscribes to webData updates (account/position data)
-func (ws *WebSocketService) SubscribeToWebData(user string, callback func(hyperliquid.WSMessage)) (int, error) {
-	if !ws.IsConnected() {
-		return 0, fmt.Errorf("websocket not connected")
-	}
-
-	subID := generateSubscriptionID()
-
-	ws.subscriptionsMu.Lock()
-	ws.subscriptions[subID] = &SubscriptionHandler{
-		ID:       subID,
-		Channel:  "webData2",
-		Coin:     user,
-		Callback: callback,
-	}
-	ws.subscriptionsMu.Unlock()
-
-	ws.handlersMu.Lock()
-	if _, exists := ws.messageHandlers["webData2"]; !exists {
-		ws.messageHandlers["webData2"] = func(data []byte) error {
-			return ws.handleWebData2Message(data)
-		}
-	}
-	ws.handlersMu.Unlock()
-
-	subMsg := map[string]interface{}{
-		"method": "subscribe",
-		"subscription": map[string]interface{}{
-			"type": "webData2",
-			"user": user,
-		},
-	}
-
-	if err := ws.connManager.SendJSON(subMsg); err != nil {
-		ws.subscriptionsMu.Lock()
-		delete(ws.subscriptions, subID)
-		ws.subscriptionsMu.Unlock()
-		return 0, fmt.Errorf("failed to subscribe to webData2: %w", err)
-	}
-
-	ws.logger.Info("📋 Subscribed to webData2: %s (subID: %d)", user, subID)
-	return subID, nil
+func (ws *WebSocketService) parseTrades(msg hyperliquid.WSMessage) ([]TradeMessage, error) {
+	return ws.parser.ParseTrades(msg)
 }
 
-func (ws *WebSocketService) handleWebData2Message(data []byte) error {
-	var msg hyperliquid.WSMessage
-	if err := json.Unmarshal(data, &msg); err != nil {
-		ws.logger.Debug("Failed to unmarshal webData2 message: %v", err)
+func (ws *WebSocketService) parseKline(msg hyperliquid.WSMessage) (*KlineMessage, error) {
+	return ws.parser.ParseKline(msg)
+}
+
+// Message handlers for specific channels
+
+func (ws *WebSocketService) handleOrderbookMessage(data []byte) error {
+	var msgWrapper struct {
+		Channel string          `json:"channel"`
+		Data    json.RawMessage `json:"data"`
+	}
+
+	if err := json.Unmarshal(data, &msgWrapper); err != nil {
+		ws.logger.Debug("Failed to unmarshal orderbook message: %v", err)
 		return nil
 	}
 
+	if msgWrapper.Channel != "l2Book" {
+		ws.logger.Warn("Failed to parse orderbook message: expected l2Book channel, got %s", msgWrapper.Channel)
+		return nil
+	}
+
+	// Call subscribed callbacks
 	ws.subscriptionsMu.RLock()
 	defer ws.subscriptionsMu.RUnlock()
 
 	for _, sub := range ws.subscriptions {
-		if sub.Channel == "webData2" {
+		if sub.Channel == "l2Book" {
+			msg := hyperliquid.WSMessage{Channel: msgWrapper.Channel, Data: msgWrapper.Data}
 			sub.Callback(msg)
 		}
 	}
@@ -485,75 +349,72 @@ func (ws *WebSocketService) handleWebData2Message(data []byte) error {
 	return nil
 }
 
-// createMessageHandler creates a reusable handler for any channel type
-func (ws *WebSocketService) createMessageHandler(channelName string) func([]byte) error {
-	return func(data []byte) error {
-		// Use baseService for rate limiting, validation, and metrics
-		return ws.baseService.ProcessMessage(data, func(validData []byte) error {
-			var msgWrapper struct {
-				Channel string          `json:"channel"`
-				Data    json.RawMessage `json:"data"`
-			}
-			if err := json.Unmarshal(validData, &msgWrapper); err != nil {
-				ws.handleError(fmt.Sprintf("%s wrapper unmarshal failed: %v", channelName, err))
-				return err
-			}
-
-			ws.logger.Debug("%s message received - channel: %s, data length: %d", channelName, msgWrapper.Channel, len(msgWrapper.Data))
-
-			var msg hyperliquid.WSMessage
-			if err := json.Unmarshal(msgWrapper.Data, &msg); err != nil {
-				ws.handleError(fmt.Sprintf("%s data unmarshal failed: %v", channelName, err))
-				return err
-			}
-
-			// Validate channel matches expected type
-			if msg.Channel != channelName && msgWrapper.Channel != channelName {
-				errMsg := fmt.Sprintf("channel mismatch - expected %s, got msg=%s wrapper=%s", channelName, msg.Channel, msgWrapper.Channel)
-				ws.handleError(errMsg)
-				return fmt.Errorf(errMsg)
-			}
-
-			// Route to all subscribed callbacks
-			ws.subscriptionsMu.RLock()
-			defer ws.subscriptionsMu.RUnlock()
-
-			for _, sub := range ws.subscriptions {
-				if sub.Channel == channelName {
-					sub.Callback(msg)
-				}
-			}
-
-			return nil
-		})
-	}
-}
-
-// handleError sends an error to the error channel and logs it
-func (ws *WebSocketService) handleError(errMsg string) {
-	ws.logger.Warn("❌ %s", errMsg)
-	select {
-	case ws.errorCh <- fmt.Errorf(errMsg):
-	default:
-		ws.logger.Warn("Error channel full, dropped: %s", errMsg)
-	}
-}
-
-// Message handlers - thin wrappers around generic handler
-
-func (ws *WebSocketService) handleOrderbookMessage(data []byte) error {
-	return ws.createMessageHandler("l2Book")(data)
-}
-
 func (ws *WebSocketService) handleTradesMessage(data []byte) error {
-	return ws.createMessageHandler("trades")(data)
+	var msgWrapper struct {
+		Channel string          `json:"channel"`
+		Data    json.RawMessage `json:"data"`
+	}
+
+	if err := json.Unmarshal(data, &msgWrapper); err != nil {
+		ws.logger.Debug("Failed to unmarshal trades message: %v", err)
+		return nil
+	}
+
+	if msgWrapper.Channel != "trades" {
+		ws.logger.Warn("Failed to parse trades message: expected trades channel, got %s", msgWrapper.Channel)
+		return nil
+	}
+
+	// Call subscribed callbacks
+	ws.subscriptionsMu.RLock()
+	defer ws.subscriptionsMu.RUnlock()
+
+	for _, sub := range ws.subscriptions {
+		if sub.Channel == "trades" {
+			msg := hyperliquid.WSMessage{Channel: msgWrapper.Channel, Data: msgWrapper.Data}
+			sub.Callback(msg)
+		}
+	}
+
+	return nil
 }
 
 func (ws *WebSocketService) handleCandleMessage(data []byte) error {
-	return ws.createMessageHandler("candle")(data)
+	var msgWrapper struct {
+		Channel string          `json:"channel"`
+		Data    json.RawMessage `json:"data"`
+	}
+
+	if err := json.Unmarshal(data, &msgWrapper); err != nil {
+		ws.logger.Debug("Failed to unmarshal candle message: %v", err)
+		return nil
+	}
+
+	if msgWrapper.Channel != "candle" {
+		ws.logger.Warn("Failed to parse candle message: expected candle channel, got %s", msgWrapper.Channel)
+		return nil
+	}
+
+	// Call subscribed callbacks
+	ws.subscriptionsMu.RLock()
+	defer ws.subscriptionsMu.RUnlock()
+
+	for _, sub := range ws.subscriptions {
+		if sub.Channel == "candle" {
+			msg := hyperliquid.WSMessage{Channel: msgWrapper.Channel, Data: msgWrapper.Data}
+			sub.Callback(msg)
+		}
+	}
+
+	return nil
 }
 
-// Helper function to generate subscription IDs
+// Disconnect closes the connection
+func (ws *WebSocketService) Disconnect() error {
+	ws.logger.Info("Disconnecting from WebSocket")
+	return ws.connManager.Disconnect()
+}
+
 var (
 	subIDCounter int64
 	subIDMutex   sync.Mutex
