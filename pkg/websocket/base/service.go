@@ -6,33 +6,32 @@ import (
 	"time"
 
 	"github.com/backtesting-org/kronos-sdk/pkg/types/logging"
+	"github.com/backtesting-org/live-trading/pkg/websocket/connection"
 	"github.com/backtesting-org/live-trading/pkg/websocket/performance"
 	"github.com/backtesting-org/live-trading/pkg/websocket/security"
 )
 
 type Config struct {
-	URL               string
-	ReconnectDelay    time.Duration
-	MaxReconnects     int
-	PingInterval      time.Duration
-	PongTimeout       time.Duration
-	MaxMessageSize    int
-	RateLimitCapacity int
-	RateLimitRefill   time.Duration
+	URL            string
+	ReconnectDelay time.Duration
+	MaxReconnects  int
+	PingInterval   time.Duration
+	PongTimeout    time.Duration
+	MaxMessageSize int
 }
 
-type BaseService struct {
+type baseService struct {
 	// Configuration
 	config Config
 	logger logging.ApplicationLogger
 
-	// Security components
-	rateLimiter *security.RateLimiter
-	validator   *security.MessageValidator
+	validator      security.MessageValidator
+	rateLimiter    security.RateLimiter
+	metrics        performance.Metrics
+	circuitBreaker performance.CircuitBreaker
 
-	// Performance components
-	metrics        *performance.Metrics
-	circuitBreaker *performance.CircuitBreaker
+	// Connection management
+	ConnectionManager connection.ConnectionManager
 
 	// Connection state
 	isConnected bool
@@ -41,29 +40,25 @@ type BaseService struct {
 	cancel      context.CancelFunc
 }
 
-func NewBaseService(config Config, logger logging.ApplicationLogger) *BaseService {
-	// Create validation config
-	validationConfig := security.ValidationConfig{
-		MaxMessageSize: config.MaxMessageSize,
-		AllowedTypes: map[string]bool{
-			"pong":         true,
-			"subscription": true,
-			"update":       true,
-			"error":        true,
-		},
-	}
-
-	return &BaseService{
+func NewBaseService(
+	config Config,
+	logger logging.ApplicationLogger,
+	validator security.MessageValidator,
+	rateLimiter security.RateLimiter,
+	metrics performance.Metrics,
+	circuitBreaker performance.CircuitBreaker,
+) BaseService {
+	return &baseService{
 		config:         config,
 		logger:         logger,
-		rateLimiter:    security.NewRateLimiter(config.RateLimitCapacity, config.RateLimitRefill),
-		validator:      security.NewMessageValidator(validationConfig),
-		metrics:        performance.NewMetrics(),
-		circuitBreaker: performance.NewCircuitBreaker(3, 30*time.Second),
+		validator:      validator,
+		rateLimiter:    rateLimiter,
+		metrics:        metrics,
+		circuitBreaker: circuitBreaker,
 	}
 }
 
-func (bs *BaseService) ProcessMessage(message []byte, handler func([]byte) error) error {
+func (bs *baseService) ProcessMessage(message []byte, handler func([]byte) error) error {
 	start := time.Now()
 	bs.metrics.IncrementReceived()
 
@@ -90,21 +85,23 @@ func (bs *BaseService) ProcessMessage(message []byte, handler func([]byte) error
 		return nil
 	}
 
-	// Process message
-	return handler(message)
+	// Process message with circuit breaker
+	return bs.circuitBreaker.Execute(func() error {
+		return handler(message)
+	})
 }
 
-func (bs *BaseService) GetMetrics() map[string]interface{} {
+func (bs *baseService) GetMetrics() map[string]interface{} {
 	return bs.metrics.GetStats()
 }
 
-func (bs *BaseService) IsConnected() bool {
+func (bs *baseService) IsConnected() bool {
 	bs.connMutex.RLock()
 	defer bs.connMutex.RUnlock()
 	return bs.isConnected
 }
 
-func (bs *BaseService) SetConnected(connected bool) {
+func (bs *baseService) SetConnected(connected bool) {
 	bs.connMutex.Lock()
 	defer bs.connMutex.Unlock()
 	bs.isConnected = connected

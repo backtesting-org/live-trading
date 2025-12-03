@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	performance2 "github.com/backtesting-org/live-trading/pkg/websocket/performance"
+	"github.com/backtesting-org/live-trading/pkg/websocket/performance"
 	"github.com/backtesting-org/live-trading/pkg/websocket/security"
 	"github.com/gorilla/websocket"
 )
@@ -40,12 +40,12 @@ func (cs ConnectionState) String() string {
 	}
 }
 
-// ConnectionManager handles WebSocket connection lifecycle with standard ping/pong
-type ConnectionManager struct {
+// connectionManager handles WebSocket connection lifecycle with standard ping/pong
+type connectionManager struct {
 	config         Config
-	authManager    *security.AuthManager
-	metrics        *performance2.Metrics
-	circuitBreaker *performance2.CircuitBreaker
+	authManager    security.AuthManager
+	metrics        performance.Metrics
+	circuitBreaker performance.CircuitBreaker
 	logger         security.Logger
 
 	conn       *websocket.Conn
@@ -59,30 +59,30 @@ type ConnectionManager struct {
 	activityMutex sync.RWMutex
 
 	onConnect    func() error
-	onDisconnect func()
+	onDisconnect func() error
 	onMessage    func([]byte) error
 	onError      func(error)
 }
 
 func NewConnectionManager(
 	config Config,
-	authManager *security.AuthManager,
-	metrics *performance2.Metrics,
+	authManager security.AuthManager,
+	metrics performance.Metrics,
 	logger security.Logger,
-) *ConnectionManager {
-	return &ConnectionManager{
+) ConnectionManager {
+	return &connectionManager{
 		config:         config,
 		authManager:    authManager,
 		metrics:        metrics,
-		circuitBreaker: performance2.NewCircuitBreaker(3, 30*time.Second),
+		circuitBreaker: performance.NewCircuitBreaker(3, 30*time.Second),
 		logger:         logger,
 		state:          StateDisconnected,
 	}
 }
 
-func (cm *ConnectionManager) SetCallbacks(
+func (cm *connectionManager) SetCallbacks(
 	onConnect func() error,
-	onDisconnect func(),
+	onDisconnect func() error,
 	onMessage func([]byte) error,
 	onError func(error),
 ) {
@@ -92,7 +92,7 @@ func (cm *ConnectionManager) SetCallbacks(
 	cm.onError = onError
 }
 
-func (cm *ConnectionManager) Connect(ctx context.Context) error {
+func (cm *connectionManager) Connect(ctx context.Context) error {
 	cm.stateMutex.Lock()
 	defer cm.stateMutex.Unlock()
 
@@ -108,7 +108,7 @@ func (cm *ConnectionManager) Connect(ctx context.Context) error {
 	})
 }
 
-func (cm *ConnectionManager) doConnect() error {
+func (cm *connectionManager) doConnect() error {
 	u, err := url.Parse(cm.config.URL)
 	if err != nil {
 		return fmt.Errorf("invalid WebSocket URL: %w", err)
@@ -188,7 +188,7 @@ func (cm *ConnectionManager) doConnect() error {
 	return nil
 }
 
-func (cm *ConnectionManager) Disconnect() error {
+func (cm *connectionManager) Disconnect() error {
 	cm.stateMutex.Lock()
 	defer cm.stateMutex.Unlock()
 
@@ -216,7 +216,7 @@ func (cm *ConnectionManager) Disconnect() error {
 	return err
 }
 
-func (cm *ConnectionManager) SendMessage(message []byte) error {
+func (cm *connectionManager) SendMessage(message []byte) error {
 	cm.stateMutex.RLock()
 	defer cm.stateMutex.RUnlock()
 
@@ -231,7 +231,12 @@ func (cm *ConnectionManager) SendMessage(message []byte) error {
 	return cm.conn.WriteMessage(websocket.TextMessage, message)
 }
 
-func (cm *ConnectionManager) SendJSON(v interface{}) error {
+// Send is an alias for SendMessage
+func (cm *connectionManager) Send(data []byte) error {
+	return cm.SendMessage(data)
+}
+
+func (cm *connectionManager) SendJSON(v interface{}) error {
 	data, err := json.Marshal(v)
 	if err != nil {
 		return fmt.Errorf("failed to marshal JSON: %w", err)
@@ -254,7 +259,7 @@ func (cm *ConnectionManager) SendJSON(v interface{}) error {
 	return cm.conn.WriteJSON(v)
 }
 
-func (cm *ConnectionManager) SendPing() error {
+func (cm *connectionManager) SendPing() error {
 	cm.stateMutex.RLock()
 	defer cm.stateMutex.RUnlock()
 
@@ -270,13 +275,13 @@ func (cm *ConnectionManager) SendPing() error {
 	return cm.conn.WriteMessage(websocket.PingMessage, nil)
 }
 
-func (cm *ConnectionManager) GetState() ConnectionState {
+func (cm *connectionManager) GetState() ConnectionState {
 	cm.stateMutex.RLock()
 	defer cm.stateMutex.RUnlock()
 	return cm.state
 }
 
-func (cm *ConnectionManager) GetConnectionStats() map[string]interface{} {
+func (cm *connectionManager) GetConnectionStats() map[string]interface{} {
 	cm.stateMutex.RLock()
 	defer cm.stateMutex.RUnlock()
 
@@ -300,7 +305,7 @@ func (cm *ConnectionManager) GetConnectionStats() map[string]interface{} {
 	return stats
 }
 
-func (cm *ConnectionManager) IsHealthy() bool {
+func (cm *connectionManager) IsHealthy() bool {
 	if cm.GetState() != StateConnected {
 		return false
 	}
@@ -313,18 +318,18 @@ func (cm *ConnectionManager) IsHealthy() bool {
 	return time.Since(lastActivity) <= cm.config.HealthCheckTimeout
 }
 
-func (cm *ConnectionManager) setState(state ConnectionState) {
+func (cm *connectionManager) setState(state ConnectionState) {
 	cm.state = state
 	cm.logger.Debug("Connection state changed to: %s", state.String())
 }
 
-func (cm *ConnectionManager) updateLastActivity() {
+func (cm *connectionManager) updateLastActivity() {
 	cm.activityMutex.Lock()
 	defer cm.activityMutex.Unlock()
 	cm.lastActivity = time.Now()
 }
 
-func (cm *ConnectionManager) readMessages() {
+func (cm *connectionManager) readMessages() {
 	defer func() {
 		if r := recover(); r != nil {
 			cm.logger.Error("WebSocket read panic: %v", r)
@@ -381,7 +386,7 @@ func (cm *ConnectionManager) readMessages() {
 }
 
 // Optional simple health monitoring (non-aggressive)
-func (cm *ConnectionManager) simpleHealthMonitor() {
+func (cm *connectionManager) simpleHealthMonitor() {
 	ticker := time.NewTicker(cm.config.HealthCheckInterval)
 	defer ticker.Stop()
 
@@ -420,7 +425,7 @@ func (cm *ConnectionManager) simpleHealthMonitor() {
 	}
 }
 
-func (cm *ConnectionManager) handleConnectionError() {
+func (cm *connectionManager) handleConnectionError() {
 	cm.stateMutex.Lock()
 	previousState := cm.state
 	cm.setState(StateDisconnected)

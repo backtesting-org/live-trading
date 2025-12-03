@@ -6,38 +6,25 @@ import (
 	"net/http"
 	"sync"
 	"time"
+
+	"github.com/backtesting-org/kronos-sdk/pkg/types/logging"
 )
 
-// AuthProvider defines the interface for WebSocket authentication
-type AuthProvider interface {
-	GetAuthHeaders(ctx context.Context) (http.Header, error)
-	IsAuthenticated() bool
-	Refresh(ctx context.Context) error
-	GetTokenExpiry() time.Time
-}
-
-// AuthManager handles authentication for WebSocket connections
-type AuthManager struct {
+// authManager handles authentication for WebSocket connections
+type authManager struct {
 	provider     AuthProvider
 	refreshMutex sync.Mutex
-	logger       Logger
+	logger       logging.ApplicationLogger
 }
 
-type Logger interface {
-	Debug(msg string, args ...interface{})
-	Info(msg string, args ...interface{})
-	Warn(msg string, args ...interface{})
-	Error(msg string, args ...interface{})
-}
-
-func NewAuthManager(provider AuthProvider, logger Logger) *AuthManager {
-	return &AuthManager{
+func NewAuthManager(provider AuthProvider, logger logging.ApplicationLogger) AuthManager {
+	return &authManager{
 		provider: provider,
 		logger:   logger,
 	}
 }
 
-func (am *AuthManager) GetSecureHeaders(ctx context.Context) (http.Header, error) {
+func (am *authManager) GetSecureHeaders(ctx context.Context) (http.Header, error) {
 	// Ensure authentication is valid
 	if !am.provider.IsAuthenticated() {
 		if err := am.refreshAuth(ctx); err != nil {
@@ -68,7 +55,7 @@ func (am *AuthManager) GetSecureHeaders(ctx context.Context) (http.Header, error
 	return headers, nil
 }
 
-func (am *AuthManager) refreshAuth(ctx context.Context) error {
+func (am *authManager) refreshAuth(ctx context.Context) error {
 	am.refreshMutex.Lock()
 	defer am.refreshMutex.Unlock()
 
@@ -86,7 +73,7 @@ func (am *AuthManager) refreshAuth(ctx context.Context) error {
 	return nil
 }
 
-func (am *AuthManager) ValidateConnection(ctx context.Context) error {
+func (am *authManager) ValidateConnection(_ context.Context) error {
 	if !am.provider.IsAuthenticated() {
 		return fmt.Errorf("not authenticated")
 	}
@@ -100,7 +87,7 @@ func (am *AuthManager) ValidateConnection(ctx context.Context) error {
 }
 
 // PeriodicRefresh starts a goroutine that periodically refreshes authentication
-func (am *AuthManager) PeriodicRefresh(ctx context.Context, interval time.Duration) {
+func (am *authManager) PeriodicRefresh(ctx context.Context, interval time.Duration) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 

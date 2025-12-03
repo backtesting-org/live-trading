@@ -30,8 +30,10 @@ func (s *service) onConnect() error {
 	return nil
 }
 
-func (s *service) onDisconnect() {
+func (s *service) onDisconnect() error {
 	s.tradingLogger.Info("Paradex WebSocket disconnected")
+
+	return nil
 }
 
 func (s *service) onMessage(message []byte) error {

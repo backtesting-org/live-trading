@@ -37,7 +37,7 @@ type realTimeService struct {
 
 func NewRealTimeService(
 	wsURL string,
-	authManager *security.AuthManager,
+	authManager *security.authManager,
 	logger logging.ApplicationLogger,
 	timeProvider temporal.TimeProvider,
 ) (RealTimeService, error) {

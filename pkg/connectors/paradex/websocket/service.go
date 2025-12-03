@@ -18,8 +18,8 @@ import (
 var _ WebSocketService = (*service)(nil)
 
 type service struct {
-	connectionManager *connection.ConnectionManager
-	reconnectManager  *connection.ReconnectManager
+	connectionManager connection.ConnectionManager
+	reconnectManager  connection.ReconnectManager
 	handlerRegistry   *base.HandlerRegistry
 	subManager        *subscriptionManager
 

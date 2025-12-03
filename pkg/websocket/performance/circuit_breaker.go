@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-type CircuitBreaker struct {
+type circuitBreaker struct {
 	maxFailures  int
 	resetTimeout time.Duration
 	failures     int
@@ -15,15 +15,16 @@ type CircuitBreaker struct {
 	mutex        sync.Mutex
 }
 
-func NewCircuitBreaker(maxFailures int, resetTimeout time.Duration) *CircuitBreaker {
-	return &CircuitBreaker{
+func NewCircuitBreaker(maxFailures int, resetTimeout time.Duration) CircuitBreaker {
+	return &circuitBreaker{
 		maxFailures:  maxFailures,
 		resetTimeout: resetTimeout,
 		state:        "closed",
 	}
 }
 
-func (cb *CircuitBreaker) Call(fn func() error) error {
+// Execute executes the given function through the circuit breaker (alias for Call)
+func (cb *circuitBreaker) Execute(fn func() error) error {
 	cb.mutex.Lock()
 	defer cb.mutex.Unlock()
 
@@ -53,7 +54,7 @@ func (cb *CircuitBreaker) Call(fn func() error) error {
 	return nil
 }
 
-func (cb *CircuitBreaker) GetState() string {
+func (cb *circuitBreaker) GetState() string {
 	cb.mutex.Lock()
 	defer cb.mutex.Unlock()
 	return cb.state

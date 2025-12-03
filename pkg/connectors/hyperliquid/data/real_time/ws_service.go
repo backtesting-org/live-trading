@@ -8,16 +8,16 @@ import (
 	"time"
 
 	"github.com/backtesting-org/kronos-sdk/pkg/types/logging"
+	"github.com/backtesting-org/live-trading/pkg/websocket/base"
 	"github.com/backtesting-org/live-trading/pkg/websocket/connection"
-	"github.com/backtesting-org/live-trading/pkg/websocket/performance"
-	"github.com/backtesting-org/live-trading/pkg/websocket/security"
 	"github.com/sonirico/go-hyperliquid"
 )
 
 // WebSocketService manages the WebSocket connection using the robust pkg/websocket infrastructure
 type WebSocketService struct {
-	connManager  *connection.ConnectionManager
-	reconnectMgr *connection.ReconnectManager
+	connManager  *connection.connectionManager
+	reconnectMgr *connection.reconnectManager
+	baseService  *base.baseService
 	logger       logging.ApplicationLogger
 
 	// Subscription tracking
@@ -47,33 +47,11 @@ type SubscriptionHandler struct {
 
 // NewWebSocketService creates a new WebSocket service using pkg/websocket infrastructure
 func NewWebSocketService(
-	wsURL string,
-	authManager *security.AuthManager,
+	baseService *base.baseService,
 	logger logging.ApplicationLogger,
 ) (*WebSocketService, error) {
-	// Create configuration
-	config := connection.DefaultConfig()
-	config.URL = wsURL
-	config.EnableHealthMonitoring = true
-	config.EnableHealthPings = true
-	config.HealthCheckInterval = 30 * time.Second
-
-	// Create metrics for connection manager
-	metrics := performance.NewMetrics()
-
-	// Create connection manager
-	connManager := connection.NewConnectionManager(config, authManager, metrics, logger)
-
-	// Create reconnection strategy
-	reconnectStrategy := connection.NewExponentialBackoffStrategy(
-		5*time.Second,  // Initial delay
-		60*time.Second, // Max delay
-		10,             // Max attempts
-	)
-
-	// Create WebSocket service
 	ws := &WebSocketService{
-		connManager:     connManager,
+		baseService:     baseService,
 		logger:          logger,
 		subscriptions:   make(map[int]*SubscriptionHandler),
 		messageHandlers: make(map[string]func([]byte) error),
@@ -81,7 +59,7 @@ func NewWebSocketService(
 	}
 
 	// Set up connection manager callbacks
-	connManager.SetCallbacks(
+	baseService.connManager.SetCallbacks(
 		ws.onConnect,
 		ws.onDisconnect,
 		ws.onMessage,
@@ -89,7 +67,13 @@ func NewWebSocketService(
 	)
 
 	// Create and set up reconnection manager
-	ws.reconnectMgr = connection.NewReconnectManager(connManager, reconnectStrategy, logger)
+	reconnectStrategy := connection.NewExponentialBackoffStrategy(
+		5*time.Second,  // Initial delay
+		60*time.Second, // Max delay
+		10,             // Max attempts
+	)
+
+	ws.reconnectMgr = connection.NewReconnectManager(baseService.connManager, reconnectStrategy, logger)
 	ws.reconnectMgr.SetCallbacks(
 		ws.onReconnectStart,
 		ws.onReconnectFail,
@@ -109,7 +93,7 @@ func (ws *WebSocketService) Connect() error {
 	ws.logger.Info("🔌 Connecting to WebSocket: %s", ws.connManager.GetState())
 
 	// Connect with circuit breaker
-	// ConnectionManager handles keep-alive internally via simpleHealthMonitor
+	// connectionManager handles keep-alive internally via simpleHealthMonitor
 	if err := ws.connManager.Connect(ws.ctx); err != nil {
 		ws.logger.Error("❌ Failed to connect to WebSocket: %v", err)
 		return fmt.Errorf("websocket connection failed: %w", err)
@@ -501,64 +485,72 @@ func (ws *WebSocketService) handleWebData2Message(data []byte) error {
 	return nil
 }
 
-// Message handlers
+// createMessageHandler creates a reusable handler for any channel type
+func (ws *WebSocketService) createMessageHandler(channelName string) func([]byte) error {
+	return func(data []byte) error {
+		// Use baseService for rate limiting, validation, and metrics
+		return ws.baseService.ProcessMessage(data, func(validData []byte) error {
+			var msgWrapper struct {
+				Channel string          `json:"channel"`
+				Data    json.RawMessage `json:"data"`
+			}
+			if err := json.Unmarshal(validData, &msgWrapper); err != nil {
+				ws.handleError(fmt.Sprintf("%s wrapper unmarshal failed: %v", channelName, err))
+				return err
+			}
+
+			ws.logger.Debug("%s message received - channel: %s, data length: %d", channelName, msgWrapper.Channel, len(msgWrapper.Data))
+
+			var msg hyperliquid.WSMessage
+			if err := json.Unmarshal(msgWrapper.Data, &msg); err != nil {
+				ws.handleError(fmt.Sprintf("%s data unmarshal failed: %v", channelName, err))
+				return err
+			}
+
+			// Validate channel matches expected type
+			if msg.Channel != channelName && msgWrapper.Channel != channelName {
+				errMsg := fmt.Sprintf("channel mismatch - expected %s, got msg=%s wrapper=%s", channelName, msg.Channel, msgWrapper.Channel)
+				ws.handleError(errMsg)
+				return fmt.Errorf(errMsg)
+			}
+
+			// Route to all subscribed callbacks
+			ws.subscriptionsMu.RLock()
+			defer ws.subscriptionsMu.RUnlock()
+
+			for _, sub := range ws.subscriptions {
+				if sub.Channel == channelName {
+					sub.Callback(msg)
+				}
+			}
+
+			return nil
+		})
+	}
+}
+
+// handleError sends an error to the error channel and logs it
+func (ws *WebSocketService) handleError(errMsg string) {
+	ws.logger.Warn("❌ %s", errMsg)
+	select {
+	case ws.errorCh <- fmt.Errorf(errMsg):
+	default:
+		ws.logger.Warn("Error channel full, dropped: %s", errMsg)
+	}
+}
+
+// Message handlers - thin wrappers around generic handler
 
 func (ws *WebSocketService) handleOrderbookMessage(data []byte) error {
-	var msg hyperliquid.WSMessage
-	if err := json.Unmarshal(data, &msg.Data); err != nil {
-		ws.logger.Debug("Failed to unmarshal orderbook message: %v", err)
-		return nil
-	}
-
-	// Call callbacks for subscriptions on this channel
-	ws.subscriptionsMu.RLock()
-	defer ws.subscriptionsMu.RUnlock()
-
-	for _, sub := range ws.subscriptions {
-		if sub.Channel == "l2Book" {
-			sub.Callback(msg)
-		}
-	}
-
-	return nil
+	return ws.createMessageHandler("l2Book")(data)
 }
 
 func (ws *WebSocketService) handleTradesMessage(data []byte) error {
-	var msg hyperliquid.WSMessage
-	if err := json.Unmarshal(data, &msg); err != nil {
-		ws.logger.Debug("Failed to unmarshal trades message: %v", err)
-		return nil
-	}
-
-	ws.subscriptionsMu.RLock()
-	defer ws.subscriptionsMu.RUnlock()
-
-	for _, sub := range ws.subscriptions {
-		if sub.Channel == "trades" {
-			sub.Callback(msg)
-		}
-	}
-
-	return nil
+	return ws.createMessageHandler("trades")(data)
 }
 
 func (ws *WebSocketService) handleCandleMessage(data []byte) error {
-	var msg hyperliquid.WSMessage
-	if err := json.Unmarshal(data, &msg); err != nil {
-		ws.logger.Debug("Failed to unmarshal candle message: %v", err)
-		return nil
-	}
-
-	ws.subscriptionsMu.RLock()
-	defer ws.subscriptionsMu.RUnlock()
-
-	for _, sub := range ws.subscriptions {
-		if sub.Channel == "candle" {
-			sub.Callback(msg)
-		}
-	}
-
-	return nil
+	return ws.createMessageHandler("candle")(data)
 }
 
 // Helper function to generate subscription IDs

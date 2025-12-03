@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-type Metrics struct {
+type metrics struct {
 	MessagesReceived  int64
 	MessagesProcessed int64
 	MessagesDropped   int64
@@ -16,43 +16,43 @@ type Metrics struct {
 	mutex             sync.RWMutex
 }
 
-func NewMetrics() *Metrics {
-	return &Metrics{}
+func NewMetrics() Metrics {
+	return &metrics{}
 }
 
-func (m *Metrics) IncrementReceived() {
+func (m *metrics) IncrementReceived() {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 	m.MessagesReceived++
 	m.LastMessageTime = time.Now()
 }
 
-func (m *Metrics) IncrementProcessed(latency time.Duration) {
+func (m *metrics) IncrementProcessed(latency time.Duration) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 	m.MessagesProcessed++
 	m.ProcessingLatency = latency
 }
 
-func (m *Metrics) IncrementDropped() {
+func (m *metrics) IncrementDropped() {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 	m.MessagesDropped++
 }
 
-func (m *Metrics) IncrementConnectionError() {
+func (m *metrics) IncrementConnectionError() {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 	m.ConnectionErrors++
 }
 
-func (m *Metrics) IncrementReconnection() {
+func (m *metrics) IncrementReconnection() {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 	m.ReconnectionCount++
 }
 
-func (m *Metrics) GetStats() map[string]interface{} {
+func (m *metrics) GetStats() map[string]interface{} {
 	m.mutex.RLock()
 	defer m.mutex.RUnlock()
 
