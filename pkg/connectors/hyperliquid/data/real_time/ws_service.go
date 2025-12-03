@@ -24,6 +24,11 @@ type WebSocketService struct {
 	subscriptionsMu sync.RWMutex
 	subscriptions   map[int]*SubscriptionHandler // Map subscription ID -> handler
 
+	// Subscription index for direct routing (no iteration)
+	// Key format: "channel:coin:interval" (e.g., "l2Book:BTC:", "candle:ETH:1m")
+	subscriptionIndex map[string][]*SubscriptionHandler
+	indexMu           sync.RWMutex
+
 	// Message routing
 	messageHandlers map[string]func([]byte) error // Channel -> handler
 	handlersMu      sync.RWMutex
@@ -69,6 +74,7 @@ func NewWebSocketService(
 		logger:             logger,
 		parser:             parser,
 		subscriptions:      make(map[int]*SubscriptionHandler),
+		subscriptionIndex:  make(map[string][]*SubscriptionHandler),
 		messageHandlers:    make(map[string]func([]byte) error),
 		orderBookCallbacks: make(map[int]func(*OrderBookMessage)),
 		tradesCallbacks:    make(map[int]func([]TradeMessage)),
@@ -262,14 +268,12 @@ func (ws *WebSocketService) resubscribeAll() {
 	}
 }
 
-// Subscription methods are organized in separate files:
-// - prices.go: SubscribeToOrderBook, UnsubscribeFromOrderBook, SubscribeToKlines, UnsubscribeFromKlines
-// - trades.go: SubscribeToTrades, UnsubscribeFromTrades
-// - account.go: SubscribeToPositions, SubscribeToAccountBalance
-
 // subscribeToChannel is the internal method that handles raw subscriptions
 func (ws *WebSocketService) subscribeToChannel(channel, coin, interval string, callback func(hyperliquid.WSMessage)) (int, error) {
+	fmt.Printf("🟢 subscribeToChannel CALLED: channel=%s, coin=%s, interval=%s\n", channel, coin, interval)
+
 	subID := generateSubscriptionID()
+	fmt.Printf("🟢 Generated subID=%d for %s/%s/%s\n", subID, channel, coin, interval)
 
 	sub := &SubscriptionHandler{
 		ID:       subID,
@@ -279,33 +283,137 @@ func (ws *WebSocketService) subscribeToChannel(channel, coin, interval string, c
 		Callback: callback,
 	}
 
+	// Store subscription by ID
 	ws.subscriptionsMu.Lock()
 	ws.subscriptions[subID] = sub
+	fmt.Printf("🟢 Stored subscription subID=%d in subscriptions map (total: %d)\n", subID, len(ws.subscriptions))
 	ws.subscriptionsMu.Unlock()
+
+	// Add to index for O(1) routing
+	indexKey := buildIndexKey(channel, coin, interval)
+	ws.indexMu.Lock()
+	ws.subscriptionIndex[indexKey] = append(ws.subscriptionIndex[indexKey], sub)
+	fmt.Printf("🟢 Added to index with key '%s' (total for this key: %d)\n", indexKey, len(ws.subscriptionIndex[indexKey]))
+	ws.indexMu.Unlock()
 
 	// Register message handler for this channel if not already registered
 	ws.handlersMu.Lock()
 	if _, exists := ws.messageHandlers[channel]; !exists {
+		fmt.Printf("🟢 Registering NEW message handler for channel '%s'\n", channel)
 		ws.messageHandlers[channel] = func(data []byte) error {
+			fmt.Printf("🔵 MESSAGE HANDLER INVOKED for channel '%s'\n", channel)
 			return ws.routeMessageToSubscriptions(channel, data)
 		}
+	} else {
+		fmt.Printf("🟡 Message handler ALREADY EXISTS for channel '%s'\n", channel)
 	}
 	ws.handlersMu.Unlock()
 
-	return subID, ws.sendSubscription(channel, coin, interval)
+	fmt.Printf("🟢 About to call sendSubscription for %s/%s/%s\n", channel, coin, interval)
+	err := ws.sendSubscription(channel, coin, interval)
+	if err != nil {
+		fmt.Printf("🔴 sendSubscription FAILED: %v\n", err)
+		return 0, err
+	}
+
+	fmt.Printf("🟢 subscribeToChannel SUCCESS: subID=%d\n", subID)
+	return subID, nil
 }
 
-// routeMessageToSubscriptions routes incoming messages to all subscriptions on that channel
+// buildIndexKey creates a lookup key for subscription routing
+// Format: "channel:coin:interval" (e.g., "l2Book:BTC:", "candle:ETH:1m")
+func buildIndexKey(channel, coin, interval string) string {
+	return fmt.Sprintf("%s:%s:%s", channel, coin, interval)
+}
+
+// extractOrderBookCoin extracts coin from l2Book message data
+// l2Book messages use "coin" field directly
+func (ws *WebSocketService) extractOrderBookCoin(data json.RawMessage) string {
+	var msgData map[string]interface{}
+	if err := json.Unmarshal(data, &msgData); err != nil {
+		fmt.Printf("🔴 extractOrderBookCoin: Failed to unmarshal: %v\n", err)
+		return ""
+	}
+
+	if coinVal, ok := msgData["coin"].(string); ok {
+		fmt.Printf("🟢 extractOrderBookCoin: Found coin='%s'\n", coinVal)
+		return coinVal
+	}
+
+	fmt.Printf("🔴 extractOrderBookCoin: No 'coin' field found in data: %+v\n", msgData)
+	return ""
+}
+
+// extractCandleMetadata extracts symbol and interval from candle message data
+// Candle messages use "s" for symbol and "i" for interval
+func (ws *WebSocketService) extractCandleMetadata(data json.RawMessage) (coin, interval string) {
+	var msgData map[string]interface{}
+	if err := json.Unmarshal(data, &msgData); err != nil {
+		fmt.Printf("🔴 extractCandleMetadata: Failed to unmarshal: %v\n", err)
+		return "", ""
+	}
+
+	if symbolVal, ok := msgData["s"].(string); ok {
+		coin = symbolVal
+		fmt.Printf("🟢 extractCandleMetadata: Found symbol='%s'\n", coin)
+	} else {
+		fmt.Printf("🔴 extractCandleMetadata: No 's' field found\n")
+	}
+
+	if intervalVal, ok := msgData["i"].(string); ok {
+		interval = intervalVal
+		fmt.Printf("🟢 extractCandleMetadata: Found interval='%s'\n", interval)
+	} else {
+		fmt.Printf("🔴 extractCandleMetadata: No 'i' field found\n")
+	}
+
+	return coin, interval
+}
+
+// routeMessageToSubscriptions routes incoming messages to matching subscriptions using O(1) index lookup
 func (ws *WebSocketService) routeMessageToSubscriptions(channel string, data []byte) error {
+	fmt.Printf("🔵 routeMessageToSubscriptions CALLED for channel '%s'\n", channel)
+
 	var msgWrapper struct {
 		Channel string          `json:"channel"`
 		Data    json.RawMessage `json:"data"`
 	}
 
 	if err := json.Unmarshal(data, &msgWrapper); err != nil {
+		fmt.Printf("🔴 Failed to unmarshal message for routing: %v\n", err)
 		ws.logger.Warn("Failed to unmarshal message for routing: %v", err)
 		return nil
 	}
+
+	// Extract metadata based on channel type
+	var coin, interval string
+	switch channel {
+	case "l2Book":
+		coin = ws.extractOrderBookCoin(msgWrapper.Data)
+		fmt.Printf("🔵 Extracted l2Book coin=%s\n", coin)
+	case "candle":
+		coin, interval = ws.extractCandleMetadata(msgWrapper.Data)
+		fmt.Printf("🔵 Extracted candle coin=%s, interval=%s\n", coin, interval)
+	default:
+		fmt.Printf("🔴 Unknown channel type '%s' for metadata extraction\n", channel)
+	}
+
+	// Build index key for O(1) lookup
+	indexKey := buildIndexKey(channel, coin, interval)
+	fmt.Printf("🔍 Looking up subscriptions with key '%s'\n", indexKey)
+
+	// Direct O(1) lookup in index
+	ws.indexMu.RLock()
+	subscriptions := ws.subscriptionIndex[indexKey]
+	ws.indexMu.RUnlock()
+
+	if len(subscriptions) == 0 {
+		fmt.Printf("🔴 NO SUBSCRIPTIONS FOUND for key '%s'\n", indexKey)
+		ws.logger.Debug("⚠️  No subscriptions for %s", indexKey)
+		return nil
+	}
+
+	fmt.Printf("✅ Found %d subscription(s) for key '%s'\n", len(subscriptions), indexKey)
 
 	// Parse as hyperliquid.WSMessage
 	msg := hyperliquid.WSMessage{
@@ -313,29 +421,15 @@ func (ws *WebSocketService) routeMessageToSubscriptions(channel string, data []b
 		Data:    msgWrapper.Data,
 	}
 
-	// Call all subscribed callbacks for this channel
-	ws.subscriptionsMu.RLock()
-	totalSubs := len(ws.subscriptions)
-	matchingCallbacks := 0
-
-	for subID, sub := range ws.subscriptions {
-		if sub.Channel == channel {
-			matchingCallbacks++
-			if sub.Callback != nil {
-				ws.subscriptionsMu.RUnlock()
-				sub.Callback(msg)
-				ws.subscriptionsMu.RLock()
-			} else {
-				ws.logger.Warn("⚠️  Subscription #%d has nil callback for channel %s", subID, channel)
-			}
+	// Call all matching callbacks
+	for _, sub := range subscriptions {
+		if sub.Callback != nil {
+			fmt.Printf("🎯 Calling callback for subscription #%d (%s:%s:%s)\n", sub.ID, sub.Channel, sub.Coin, sub.Interval)
+			sub.Callback(msg)
+			fmt.Printf("✅ Callback completed for subscription #%d\n", sub.ID)
+		} else {
+			fmt.Printf("⚠️  Callback is NIL for subscription #%d\n", sub.ID)
 		}
-	}
-	ws.subscriptionsMu.RUnlock()
-
-	if matchingCallbacks == 0 {
-		ws.logger.Warn("⚠️  No subscriptions found for channel '%s' (total: %d)", channel, totalSubs)
-	} else {
-		ws.logger.Debug("📊 Routed '%s' message to %d subscriptions", channel, matchingCallbacks)
 	}
 
 	return nil
@@ -343,6 +437,8 @@ func (ws *WebSocketService) routeMessageToSubscriptions(channel string, data []b
 
 // sendSubscription sends a subscription message to Hyperliquid
 func (ws *WebSocketService) sendSubscription(channel, coin, interval string) error {
+	fmt.Printf("🟢 sendSubscription CALLED: channel=%s, coin=%s, interval=%s\n", channel, coin, interval)
+
 	subMsg := map[string]interface{}{
 		"method": "subscribe",
 		"subscription": map[string]interface{}{
@@ -357,10 +453,19 @@ func (ws *WebSocketService) sendSubscription(channel, coin, interval string) err
 
 	data, err := json.Marshal(subMsg)
 	if err != nil {
+		fmt.Printf("🔴 Failed to marshal subscription: %v\n", err)
 		return fmt.Errorf("failed to marshal subscription: %w", err)
 	}
 
-	return ws.connManager.Send(data)
+	fmt.Printf("🟢 Sending subscription message: %s\n", string(data))
+	err = ws.connManager.Send(data)
+	if err != nil {
+		fmt.Printf("🔴 connManager.Send FAILED: %v\n", err)
+		return err
+	}
+
+	fmt.Printf("✅ Subscription message sent successfully\n")
+	return nil
 }
 
 // Parsing helper functions that use the injected parser

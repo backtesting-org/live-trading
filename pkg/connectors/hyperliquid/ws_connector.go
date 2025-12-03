@@ -49,8 +49,42 @@ func (h *hyperliquid) IsWebSocketConnected() bool {
 }
 
 // OrderBookUpdates returns a channel for order book updates
+// DEPRECATED: Use GetAllOrderBookChannels() instead for proper per-asset routing
 func (h *hyperliquid) OrderBookUpdates() <-chan connector.OrderBook {
-	return h.orderBookCh
+	h.appLogger.Warn("⚠️  OrderBookUpdates() is deprecated - use GetAllOrderBookChannels() for proper routing")
+	// Return nil to force migration to new method
+	return nil
+}
+
+// GetOrderBookChannel returns the channel for a specific asset subscription
+func (h *hyperliquid) GetOrderBookChannel(asset portfolio.Asset) <-chan connector.OrderBook {
+	symbol := h.normaliseAssetName(asset)
+
+	h.orderBookMu.RLock()
+	defer h.orderBookMu.RUnlock()
+
+	ch, exists := h.orderBookChannels[symbol]
+	if !exists {
+		h.appLogger.Error("❌ No orderbook channel found for %s", symbol)
+		return nil
+	}
+
+	h.appLogger.Info("📊 Returning orderbook channel %p for %s", ch, symbol)
+	return ch
+}
+
+// GetAllOrderBookChannels returns all active orderbook channels (for ingestor to read from all)
+func (h *hyperliquid) GetAllOrderBookChannels() map[string]<-chan connector.OrderBook {
+	h.orderBookMu.RLock()
+	defer h.orderBookMu.RUnlock()
+
+	result := make(map[string]<-chan connector.OrderBook, len(h.orderBookChannels))
+	for key, ch := range h.orderBookChannels {
+		result[key] = ch
+	}
+
+	h.appLogger.Info("📊 Returning %d orderbook channels", len(result))
+	return result
 }
 
 // TradeUpdates returns a channel for trade updates
@@ -70,7 +104,42 @@ func (h *hyperliquid) AccountBalanceUpdates() <-chan connector.AccountBalance {
 
 // KlineUpdates returns a channel for kline/candlestick updates
 func (h *hyperliquid) KlineUpdates() <-chan connector.Kline {
-	return h.klineCh
+	// This method is deprecated - use GetKlineChannel instead
+	// Return nil to force users to use the new method
+	h.appLogger.Warn("⚠️  KlineUpdates() is deprecated - use connector-specific channel access")
+	return nil
+}
+
+// GetKlineChannel returns the channel for a specific asset/interval subscription
+func (h *hyperliquid) GetKlineChannel(asset portfolio.Asset, interval string) <-chan connector.Kline {
+	symbol := h.normaliseAssetName(asset)
+	channelKey := fmt.Sprintf("%s:%s", symbol, interval)
+
+	h.klineMu.RLock()
+	defer h.klineMu.RUnlock()
+
+	ch, exists := h.klineChannels[channelKey]
+	if !exists {
+		h.appLogger.Error("❌ No kline channel found for %s", channelKey)
+		return nil
+	}
+
+	h.appLogger.Info("📊 Returning kline channel %p for %s", ch, channelKey)
+	return ch
+}
+
+// GetAllKlineChannels returns all active kline channels (for ingestor to read from all)
+func (h *hyperliquid) GetAllKlineChannels() map[string]<-chan connector.Kline {
+	h.klineMu.RLock()
+	defer h.klineMu.RUnlock()
+
+	result := make(map[string]<-chan connector.Kline, len(h.klineChannels))
+	for key, ch := range h.klineChannels {
+		result[key] = ch
+	}
+
+	h.appLogger.Info("📊 Returning %d kline channels", len(result))
+	return result
 }
 
 // ErrorChannel returns a channel for WebSocket errors
@@ -85,6 +154,18 @@ func (h *hyperliquid) SubscribeOrderBook(asset portfolio.Asset, instrumentType c
 	}
 
 	symbol := h.normaliseAssetName(asset)
+
+	// Create dedicated channel for this asset if it doesn't exist
+	h.orderBookMu.Lock()
+	orderBookCh, exists := h.orderBookChannels[symbol]
+	if !exists {
+		orderBookCh = make(chan connector.OrderBook, 100)
+		h.orderBookChannels[symbol] = orderBookCh
+		h.appLogger.Info("🔗 Created NEW orderbook channel for %s: %p", symbol, orderBookCh)
+	} else {
+		h.appLogger.Info("🔗 Reusing EXISTING orderbook channel for %s: %p", symbol, orderBookCh)
+	}
+	h.orderBookMu.Unlock()
 
 	subID, err := h.realTime.SubscribeToOrderBook(symbol, func(obMsg *real_time.OrderBookMessage) {
 		bids := make([]connector.PriceLevel, len(obMsg.Bids))
@@ -111,8 +192,8 @@ func (h *hyperliquid) SubscribeOrderBook(asset portfolio.Asset, instrumentType c
 		}
 
 		select {
-		case h.orderBookCh <- orderBook:
-			h.appLogger.Debug("📊 Sent orderbook for %s to channel (bids: %d, asks: %d)", symbol, len(bids), len(asks))
+		case orderBookCh <- orderBook:
+			h.appLogger.Debug("📊 Sent orderbook for %s to dedicated channel %p (bids: %d, asks: %d)", symbol, orderBookCh, len(bids), len(asks))
 		default:
 			h.appLogger.Warn("⚠️  Orderbook channel FULL for %s - dropping update (channel buffer: 100)", symbol)
 		}
@@ -124,6 +205,8 @@ func (h *hyperliquid) SubscribeOrderBook(asset portfolio.Asset, instrumentType c
 	h.subMu.Lock()
 	h.subscriptions["orderbook:"+symbol] = subID
 	h.subMu.Unlock()
+
+	h.appLogger.Info("✅ Subscribed to orderbook for %s (subID: %d)", symbol, subID)
 	return nil
 }
 
@@ -318,8 +401,24 @@ func (h *hyperliquid) SubscribeKlines(asset portfolio.Asset, interval string) er
 	}
 
 	symbol := h.normaliseAssetName(asset)
+	channelKey := fmt.Sprintf("%s:%s", symbol, interval)
+
+	h.appLogger.Info("🔗 SubscribeKlines called on connector %p for %s", h, channelKey)
+
+	// Create dedicated channel for this subscription
+	h.klineMu.Lock()
+	klineCh := make(chan connector.Kline, 100)
+	h.klineChannels[channelKey] = klineCh
+	h.klineMu.Unlock()
 
 	subID, err := h.realTime.SubscribeToKlines(symbol, interval, func(klineMsg *real_time.KlineMessage) {
+		// CRITICAL: Only process klines matching the subscribed interval
+		// Hyperliquid sends ALL intervals even if you only subscribe to one
+		if klineMsg.Interval != interval {
+			h.appLogger.Debug("⏭️  Skipping %s kline (subscribed to %s)", klineMsg.Interval, interval)
+			return
+		}
+
 		kline := connector.Kline{
 			Symbol:    symbol,
 			Interval:  klineMsg.Interval,
@@ -333,10 +432,10 @@ func (h *hyperliquid) SubscribeKlines(asset portfolio.Asset, interval string) er
 		}
 
 		select {
-		case h.klineCh <- kline:
-			h.appLogger.Info("✅ Sent %s %s kline to channel (O:%.2f C:%.2f)", symbol, klineMsg.Interval, klineMsg.Open.InexactFloat64(), klineMsg.Close.InexactFloat64())
+		case klineCh <- kline:
+			h.appLogger.Debug("✅ Sent %s %s kline to dedicated channel", symbol, interval)
 		default:
-			h.appLogger.Warn("⚠️  Kline channel FULL for %s %s - dropping update (buffer: 100)", symbol, klineMsg.Interval)
+			h.appLogger.Warn("⚠️  Channel full for %s - dropping update (buffer: 100)", channelKey)
 		}
 	})
 	if err != nil {

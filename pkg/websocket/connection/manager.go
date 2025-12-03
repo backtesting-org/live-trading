@@ -366,7 +366,6 @@ func (cm *connectionManager) readMessages() {
 			return
 		}
 
-		cm.logger.Debug("🔄 Loop #%d: Waiting for message...", messageCount+1)
 		_, message, err := cm.conn.ReadMessage()
 
 		if err != nil {
@@ -381,7 +380,6 @@ func (cm *connectionManager) readMessages() {
 		}
 
 		messageCount++
-		cm.logger.Info("📥 Message #%d received (%d bytes)", messageCount, len(message))
 
 		// Update activity on any message received
 		cm.updateLastActivity()
