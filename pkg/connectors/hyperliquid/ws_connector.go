@@ -28,7 +28,7 @@ func (h *hyperliquid) forwardWebSocketErrors() {
 		select {
 		case h.errorCh <- err:
 		default:
-			h.appLogger.Warn("Error channel full, dropping websocket error: %v", err)
+			// Error channel is full, drop the error
 		}
 	}
 }
@@ -57,7 +57,6 @@ func (h *hyperliquid) GetOrderBookChannels() map[string]<-chan connector.OrderBo
 		result[key] = ch
 	}
 
-	h.appLogger.Info("📊 Returning %d orderbook channels", len(result))
 	return result
 }
 
@@ -86,7 +85,6 @@ func (h *hyperliquid) GetKlineChannels() map[string]<-chan connector.Kline {
 		result[key] = ch
 	}
 
-	h.appLogger.Info("📊 Returning %d kline channels", len(result))
 	return result
 }
 
@@ -96,7 +94,7 @@ func (h *hyperliquid) ErrorChannel() <-chan error {
 }
 
 // SubscribeOrderBook subscribes to order book updates for an asset
-func (h *hyperliquid) SubscribeOrderBook(asset portfolio.Asset, instrumentType connector.Instrument) error {
+func (h *hyperliquid) SubscribeOrderBook(asset portfolio.Asset, _ connector.Instrument) error {
 	if !h.initialized {
 		return fmt.Errorf("connector not initialized")
 	}
@@ -109,9 +107,6 @@ func (h *hyperliquid) SubscribeOrderBook(asset portfolio.Asset, instrumentType c
 	if !exists {
 		orderBookCh = make(chan connector.OrderBook, 100)
 		h.orderBookChannels[symbol] = orderBookCh
-		h.appLogger.Info("🔗 Created NEW orderbook channel for %s: %p", symbol, orderBookCh)
-	} else {
-		h.appLogger.Info("🔗 Reusing EXISTING orderbook channel for %s: %p", symbol, orderBookCh)
 	}
 	h.orderBookMu.Unlock()
 
@@ -141,9 +136,12 @@ func (h *hyperliquid) SubscribeOrderBook(asset portfolio.Asset, instrumentType c
 
 		select {
 		case orderBookCh <- orderBook:
-			h.appLogger.Debug("📊 Sent orderbook for %s to dedicated channel %p (bids: %d, asks: %d)", symbol, orderBookCh, len(bids), len(asks))
 		default:
-			h.appLogger.Warn("⚠️  Orderbook channel FULL for %s - dropping update (channel buffer: 100)", symbol)
+			// Send error to error channel if channel is full
+			select {
+			case h.errorCh <- fmt.Errorf("orderbook channel full for %s, dropping update", symbol):
+			default:
+			}
 		}
 	})
 	if err != nil {
@@ -154,12 +152,11 @@ func (h *hyperliquid) SubscribeOrderBook(asset portfolio.Asset, instrumentType c
 	h.subscriptions["orderbook:"+symbol] = subID
 	h.subMu.Unlock()
 
-	h.appLogger.Info("✅ Subscribed to orderbook for %s (subID: %d)", symbol, subID)
 	return nil
 }
 
 // UnsubscribeOrderBook unsubscribes from order book updates
-func (h *hyperliquid) UnsubscribeOrderBook(asset portfolio.Asset, instrumentType connector.Instrument) error {
+func (h *hyperliquid) UnsubscribeOrderBook(asset portfolio.Asset, _ connector.Instrument) error {
 	if !h.initialized {
 		return fmt.Errorf("connector not initialized")
 	}
@@ -179,7 +176,7 @@ func (h *hyperliquid) UnsubscribeOrderBook(asset portfolio.Asset, instrumentType
 }
 
 // SubscribeTrades subscribes to trade updates for an asset
-func (h *hyperliquid) SubscribeTrades(asset portfolio.Asset, instrumentType connector.Instrument) error {
+func (h *hyperliquid) SubscribeTrades(asset portfolio.Asset, _ connector.Instrument) error {
 	if !h.initialized {
 		return fmt.Errorf("connector not initialized")
 	}
@@ -198,6 +195,10 @@ func (h *hyperliquid) SubscribeTrades(asset portfolio.Asset, instrumentType conn
 				Timestamp: trade.Timestamp,
 			}:
 			default:
+				select {
+				case h.errorCh <- fmt.Errorf("trade channel full for %s, dropping update", symbol):
+				default:
+				}
 			}
 		}
 	})
@@ -212,7 +213,7 @@ func (h *hyperliquid) SubscribeTrades(asset portfolio.Asset, instrumentType conn
 }
 
 // UnsubscribeTrades unsubscribes from trade updates
-func (h *hyperliquid) UnsubscribeTrades(asset portfolio.Asset, instrumentType connector.Instrument) error {
+func (h *hyperliquid) UnsubscribeTrades(asset portfolio.Asset, _ connector.Instrument) error {
 	if !h.initialized {
 		return fmt.Errorf("connector not initialized")
 	}
@@ -232,7 +233,7 @@ func (h *hyperliquid) UnsubscribeTrades(asset portfolio.Asset, instrumentType co
 }
 
 // SubscribePositions subscribes to position updates
-func (h *hyperliquid) SubscribePositions(asset portfolio.Asset, instrumentType connector.Instrument) error {
+func (h *hyperliquid) SubscribePositions(asset portfolio.Asset, _ connector.Instrument) error {
 	if !h.initialized {
 		return fmt.Errorf("connector not initialized")
 	}
@@ -262,6 +263,10 @@ func (h *hyperliquid) SubscribePositions(asset portfolio.Asset, instrumentType c
 			UpdatedAt:     posMsg.Timestamp,
 		}:
 		default:
+			select {
+			case h.errorCh <- fmt.Errorf("position channel full for %s, dropping update", symbol):
+			default:
+			}
 		}
 	})
 	if err != nil {
@@ -275,7 +280,7 @@ func (h *hyperliquid) SubscribePositions(asset portfolio.Asset, instrumentType c
 }
 
 // UnsubscribePositions unsubscribes from position updates
-func (h *hyperliquid) UnsubscribePositions(asset portfolio.Asset, instrumentType connector.Instrument) error {
+func (h *hyperliquid) UnsubscribePositions(asset portfolio.Asset, _ connector.Instrument) error {
 	if !h.initialized {
 		return fmt.Errorf("connector not initialized")
 	}
@@ -311,6 +316,10 @@ func (h *hyperliquid) SubscribeAccountBalance() error {
 			UpdatedAt:        balMsg.Timestamp,
 		}:
 		default:
+			select {
+			case h.errorCh <- fmt.Errorf("balance channel full, dropping update"):
+			default:
+			}
 		}
 	})
 	if err != nil {
@@ -351,8 +360,6 @@ func (h *hyperliquid) SubscribeKlines(asset portfolio.Asset, interval string) er
 	symbol := h.normaliseAssetName(asset)
 	channelKey := fmt.Sprintf("%s:%s", symbol, interval)
 
-	h.appLogger.Info("🔗 SubscribeKlines called on connector %p for %s", h, channelKey)
-
 	// Create dedicated channel for this subscription
 	h.klineMu.Lock()
 	klineCh := make(chan connector.Kline, 100)
@@ -360,10 +367,9 @@ func (h *hyperliquid) SubscribeKlines(asset portfolio.Asset, interval string) er
 	h.klineMu.Unlock()
 
 	subID, err := h.realTime.SubscribeToKlines(symbol, interval, func(klineMsg *websocket.KlineMessage) {
-		// CRITICAL: Only process klines matching the subscribed interval
+		// Only process klines matching the subscribed interval
 		// Hyperliquid sends ALL intervals even if you only subscribe to one
 		if klineMsg.Interval != interval {
-			h.appLogger.Debug("⏭️  Skipping %s kline (subscribed to %s)", klineMsg.Interval, interval)
 			return
 		}
 
@@ -381,9 +387,11 @@ func (h *hyperliquid) SubscribeKlines(asset portfolio.Asset, interval string) er
 
 		select {
 		case klineCh <- kline:
-			h.appLogger.Debug("✅ Sent %s %s kline to dedicated channel", symbol, interval)
 		default:
-			h.appLogger.Warn("⚠️  Channel full for %s - dropping update (buffer: 100)", channelKey)
+			select {
+			case h.errorCh <- fmt.Errorf("kline channel full for %s, dropping update", channelKey):
+			default:
+			}
 		}
 	})
 	if err != nil {
