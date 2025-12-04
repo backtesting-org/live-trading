@@ -1,22 +1,36 @@
 package hyperliquid
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/backtesting-org/kronos-sdk/pkg/types/connector"
 	"github.com/backtesting-org/kronos-sdk/pkg/types/portfolio"
-	"github.com/backtesting-org/live-trading/pkg/connectors/hyperliquid/data/real_time"
+	"github.com/backtesting-org/live-trading/pkg/connectors/hyperliquid/websocket"
 	"github.com/backtesting-org/live-trading/pkg/connectors/types"
 )
 
 // StartWebSocket starts the WebSocket connection for real-time data
-func (h *hyperliquid) StartWebSocket(ctx context.Context) error {
+func (h *hyperliquid) StartWebSocket() error {
 	if !h.initialized {
 		return fmt.Errorf("connector not initialized")
 	}
 
-	return h.realTime.Connect(ctx)
+	// Start error forwarding from realTime service
+	go h.forwardWebSocketErrors()
+
+	return h.realTime.Connect()
+}
+
+// forwardWebSocketErrors forwards errors from the realTime service to the connector's error channel
+func (h *hyperliquid) forwardWebSocketErrors() {
+	errCh := h.realTime.GetErrorChannel()
+	for err := range errCh {
+		select {
+		case h.errorCh <- err:
+		default:
+			h.appLogger.Warn("Error channel full, dropping websocket error: %v", err)
+		}
+	}
 }
 
 // StopWebSocket stops the WebSocket connection
@@ -30,12 +44,21 @@ func (h *hyperliquid) StopWebSocket() error {
 
 // IsWebSocketConnected returns whether the WebSocket is connected
 func (h *hyperliquid) IsWebSocketConnected() bool {
-	return h.initialized && h.wsClient.IsConfigured()
+	return h.initialized && h.realTime != nil
 }
 
-// OrderBookUpdates returns a channel for order book updates
-func (h *hyperliquid) OrderBookUpdates() <-chan connector.OrderBook {
-	return h.orderBookCh
+// GetOrderBookChannels returns all active orderbook channels
+func (h *hyperliquid) GetOrderBookChannels() map[string]<-chan connector.OrderBook {
+	h.orderBookMu.RLock()
+	defer h.orderBookMu.RUnlock()
+
+	result := make(map[string]<-chan connector.OrderBook, len(h.orderBookChannels))
+	for key, ch := range h.orderBookChannels {
+		result[key] = ch
+	}
+
+	h.appLogger.Info("📊 Returning %d orderbook channels", len(result))
+	return result
 }
 
 // TradeUpdates returns a channel for trade updates
@@ -53,9 +76,18 @@ func (h *hyperliquid) AccountBalanceUpdates() <-chan connector.AccountBalance {
 	return h.balanceCh
 }
 
-// KlineUpdates returns a channel for kline/candlestick updates
-func (h *hyperliquid) KlineUpdates() <-chan connector.Kline {
-	return h.klineCh
+// GetKlineChannels returns all active kline channels
+func (h *hyperliquid) GetKlineChannels() map[string]<-chan connector.Kline {
+	h.klineMu.RLock()
+	defer h.klineMu.RUnlock()
+
+	result := make(map[string]<-chan connector.Kline, len(h.klineChannels))
+	for key, ch := range h.klineChannels {
+		result[key] = ch
+	}
+
+	h.appLogger.Info("📊 Returning %d kline channels", len(result))
+	return result
 }
 
 // ErrorChannel returns a channel for WebSocket errors
@@ -69,7 +101,21 @@ func (h *hyperliquid) SubscribeOrderBook(asset portfolio.Asset, instrumentType c
 		return fmt.Errorf("connector not initialized")
 	}
 
-	subID, err := h.realTime.SubscribeToOrderBook(asset.Symbol(), func(obMsg *real_time.OrderBookMessage) {
+	symbol := h.normaliseAssetName(asset)
+
+	// Create dedicated channel for this asset if it doesn't exist
+	h.orderBookMu.Lock()
+	orderBookCh, exists := h.orderBookChannels[symbol]
+	if !exists {
+		orderBookCh = make(chan connector.OrderBook, 100)
+		h.orderBookChannels[symbol] = orderBookCh
+		h.appLogger.Info("🔗 Created NEW orderbook channel for %s: %p", symbol, orderBookCh)
+	} else {
+		h.appLogger.Info("🔗 Reusing EXISTING orderbook channel for %s: %p", symbol, orderBookCh)
+	}
+	h.orderBookMu.Unlock()
+
+	subID, err := h.realTime.SubscribeToOrderBook(symbol, func(obMsg *websocket.OrderBookMessage) {
 		bids := make([]connector.PriceLevel, len(obMsg.Bids))
 		for i, bid := range obMsg.Bids {
 			bids[i] = connector.PriceLevel{
@@ -94,8 +140,10 @@ func (h *hyperliquid) SubscribeOrderBook(asset portfolio.Asset, instrumentType c
 		}
 
 		select {
-		case h.orderBookCh <- orderBook:
+		case orderBookCh <- orderBook:
+			h.appLogger.Debug("📊 Sent orderbook for %s to dedicated channel %p (bids: %d, asks: %d)", symbol, orderBookCh, len(bids), len(asks))
 		default:
+			h.appLogger.Warn("⚠️  Orderbook channel FULL for %s - dropping update (channel buffer: 100)", symbol)
 		}
 	})
 	if err != nil {
@@ -103,8 +151,10 @@ func (h *hyperliquid) SubscribeOrderBook(asset portfolio.Asset, instrumentType c
 	}
 
 	h.subMu.Lock()
-	h.subscriptions["orderbook:"+asset.Symbol()] = subID
+	h.subscriptions["orderbook:"+symbol] = subID
 	h.subMu.Unlock()
+
+	h.appLogger.Info("✅ Subscribed to orderbook for %s (subID: %d)", symbol, subID)
 	return nil
 }
 
@@ -114,16 +164,18 @@ func (h *hyperliquid) UnsubscribeOrderBook(asset portfolio.Asset, instrumentType
 		return fmt.Errorf("connector not initialized")
 	}
 
+	symbol := h.normaliseAssetName(asset)
+
 	h.subMu.Lock()
-	subID, exists := h.subscriptions["orderbook:"+asset.Symbol()]
+	subID, exists := h.subscriptions["orderbook:"+symbol]
 	if !exists {
 		h.subMu.Unlock()
-		return fmt.Errorf("no active subscription for orderbook:%s", asset.Symbol())
+		return fmt.Errorf("no active subscription for orderbook:%s", symbol)
 	}
-	delete(h.subscriptions, "orderbook:"+asset.Symbol())
+	delete(h.subscriptions, "orderbook:"+symbol)
 	h.subMu.Unlock()
 
-	return h.realTime.UnsubscribeFromOrderBook(asset.Symbol(), subID)
+	return h.realTime.UnsubscribeFromOrderBook(symbol, subID)
 }
 
 // SubscribeTrades subscribes to trade updates for an asset
@@ -132,7 +184,9 @@ func (h *hyperliquid) SubscribeTrades(asset portfolio.Asset, instrumentType conn
 		return fmt.Errorf("connector not initialized")
 	}
 
-	subID, err := h.realTime.SubscribeToTrades(asset.Symbol(), func(trades []real_time.TradeMessage) {
+	symbol := h.normaliseAssetName(asset)
+
+	subID, err := h.realTime.SubscribeToTrades(symbol, func(trades []websocket.TradeMessage) {
 		for _, trade := range trades {
 			select {
 			case h.tradeCh <- connector.Trade{
@@ -152,7 +206,7 @@ func (h *hyperliquid) SubscribeTrades(asset portfolio.Asset, instrumentType conn
 	}
 
 	h.subMu.Lock()
-	h.subscriptions["trades:"+asset.Symbol()] = subID
+	h.subscriptions["trades:"+symbol] = subID
 	h.subMu.Unlock()
 	return nil
 }
@@ -163,16 +217,18 @@ func (h *hyperliquid) UnsubscribeTrades(asset portfolio.Asset, instrumentType co
 		return fmt.Errorf("connector not initialized")
 	}
 
+	symbol := h.normaliseAssetName(asset)
+
 	h.subMu.Lock()
-	subID, exists := h.subscriptions["trades:"+asset.Symbol()]
+	subID, exists := h.subscriptions["trades:"+symbol]
 	if !exists {
 		h.subMu.Unlock()
-		return fmt.Errorf("no active subscription for trades:%s", asset.Symbol())
+		return fmt.Errorf("no active subscription for trades:%s", symbol)
 	}
-	delete(h.subscriptions, "trades:"+asset.Symbol())
+	delete(h.subscriptions, "trades:"+symbol)
 	h.subMu.Unlock()
 
-	return h.realTime.UnsubscribeFromTrades(asset.Symbol(), subID)
+	return h.realTime.UnsubscribeFromTrades(symbol, subID)
 }
 
 // SubscribePositions subscribes to position updates
@@ -181,8 +237,10 @@ func (h *hyperliquid) SubscribePositions(asset portfolio.Asset, instrumentType c
 		return fmt.Errorf("connector not initialized")
 	}
 
-	subID, err := h.realTime.SubscribeToPositions(h.config.AccountAddress, func(posMsg *real_time.PositionMessage) {
-		if posMsg.Coin != asset.Symbol() {
+	symbol := h.normaliseAssetName(asset)
+
+	subID, err := h.realTime.SubscribeToPositions(h.config.AccountAddress, func(posMsg *websocket.PositionMessage) {
+		if posMsg.Coin != symbol {
 			return
 		}
 
@@ -211,7 +269,7 @@ func (h *hyperliquid) SubscribePositions(asset portfolio.Asset, instrumentType c
 	}
 
 	h.subMu.Lock()
-	h.subscriptions["positions:"+asset.Symbol()] = subID
+	h.subscriptions["positions:"+symbol] = subID
 	h.subMu.Unlock()
 	return nil
 }
@@ -222,13 +280,15 @@ func (h *hyperliquid) UnsubscribePositions(asset portfolio.Asset, instrumentType
 		return fmt.Errorf("connector not initialized")
 	}
 
+	symbol := h.normaliseAssetName(asset)
+
 	h.subMu.Lock()
-	_, exists := h.subscriptions["positions:"+asset.Symbol()]
+	_, exists := h.subscriptions["positions:"+symbol]
 	if !exists {
 		h.subMu.Unlock()
-		return fmt.Errorf("no active subscription for positions:%s", asset.Symbol())
+		return fmt.Errorf("no active subscription for positions:%s", symbol)
 	}
-	delete(h.subscriptions, "positions:"+asset.Symbol())
+	delete(h.subscriptions, "positions:"+symbol)
 	h.subMu.Unlock()
 
 	// No unsubscribe method for positions yet
@@ -241,7 +301,7 @@ func (h *hyperliquid) SubscribeAccountBalance() error {
 		return fmt.Errorf("connector not initialized")
 	}
 
-	subID, err := h.realTime.SubscribeToAccountBalance(h.config.AccountAddress, func(balMsg *real_time.AccountBalanceMessage) {
+	subID, err := h.realTime.SubscribeToAccountBalance(h.config.AccountAddress, func(balMsg *websocket.AccountBalanceMessage) {
 		select {
 		case h.balanceCh <- connector.AccountBalance{
 			TotalBalance:     balMsg.TotalAccountValue,
@@ -288,10 +348,27 @@ func (h *hyperliquid) SubscribeKlines(asset portfolio.Asset, interval string) er
 		return fmt.Errorf("connector not initialized")
 	}
 
-	subID, err := h.realTime.SubscribeToKlines(asset.Symbol(), interval, func(klineMsg *real_time.KlineMessage) {
-		select {
-		case h.klineCh <- connector.Kline{
-			Symbol:    asset.Symbol(),
+	symbol := h.normaliseAssetName(asset)
+	channelKey := fmt.Sprintf("%s:%s", symbol, interval)
+
+	h.appLogger.Info("🔗 SubscribeKlines called on connector %p for %s", h, channelKey)
+
+	// Create dedicated channel for this subscription
+	h.klineMu.Lock()
+	klineCh := make(chan connector.Kline, 100)
+	h.klineChannels[channelKey] = klineCh
+	h.klineMu.Unlock()
+
+	subID, err := h.realTime.SubscribeToKlines(symbol, interval, func(klineMsg *websocket.KlineMessage) {
+		// CRITICAL: Only process klines matching the subscribed interval
+		// Hyperliquid sends ALL intervals even if you only subscribe to one
+		if klineMsg.Interval != interval {
+			h.appLogger.Debug("⏭️  Skipping %s kline (subscribed to %s)", klineMsg.Interval, interval)
+			return
+		}
+
+		kline := connector.Kline{
+			Symbol:    symbol,
 			Interval:  klineMsg.Interval,
 			OpenTime:  klineMsg.OpenTime,
 			Open:      klineMsg.Open,
@@ -300,8 +377,13 @@ func (h *hyperliquid) SubscribeKlines(asset portfolio.Asset, interval string) er
 			Close:     klineMsg.Close,
 			Volume:    klineMsg.Volume,
 			CloseTime: klineMsg.CloseTime,
-		}:
+		}
+
+		select {
+		case klineCh <- kline:
+			h.appLogger.Debug("✅ Sent %s %s kline to dedicated channel", symbol, interval)
 		default:
+			h.appLogger.Warn("⚠️  Channel full for %s - dropping update (buffer: 100)", channelKey)
 		}
 	})
 	if err != nil {
@@ -309,7 +391,7 @@ func (h *hyperliquid) SubscribeKlines(asset portfolio.Asset, interval string) er
 	}
 
 	h.subMu.Lock()
-	h.subscriptions["klines:"+asset.Symbol()+":"+interval] = subID
+	h.subscriptions["klines:"+symbol+":"+interval] = subID
 	h.subMu.Unlock()
 	return nil
 }
@@ -320,8 +402,10 @@ func (h *hyperliquid) UnsubscribeKlines(asset portfolio.Asset, interval string) 
 		return fmt.Errorf("connector not initialized")
 	}
 
+	symbol := h.normaliseAssetName(asset)
+
 	h.subMu.Lock()
-	key := "klines:" + asset.Symbol() + ":" + interval
+	key := "klines:" + symbol + ":" + interval
 	subID, exists := h.subscriptions[key]
 	if !exists {
 		h.subMu.Unlock()
@@ -330,5 +414,5 @@ func (h *hyperliquid) UnsubscribeKlines(asset portfolio.Asset, interval string) 
 	delete(h.subscriptions, key)
 	h.subMu.Unlock()
 
-	return h.realTime.UnsubscribeFromKlines(asset.Symbol(), interval, subID)
+	return h.realTime.UnsubscribeFromKlines(symbol, interval, subID)
 }

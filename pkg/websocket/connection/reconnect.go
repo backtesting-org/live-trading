@@ -8,37 +8,31 @@ import (
 	"sync"
 	"time"
 
-	"github.com/backtesting-org/live-trading/pkg/websocket/security"
+	"github.com/backtesting-org/kronos-sdk/pkg/types/logging"
 )
 
-type ReconnectStrategy interface {
-	NextDelay(attempt int) time.Duration
-	ShouldReconnect(attempt int, err error) bool
-	Reset()
-}
-
-type ExponentialBackoffStrategy struct {
+type exponentialBackoffStrategy struct {
 	InitialDelay time.Duration
 	MaxDelay     time.Duration
-	MaxAttempts  int
+	maxAttempts  int
 	Multiplier   float64
 	Jitter       bool
 	randSource   *rand.Rand
 	mutex        sync.Mutex
 }
 
-func NewExponentialBackoffStrategy(initialDelay, maxDelay time.Duration, maxAttempts int) *ExponentialBackoffStrategy {
-	return &ExponentialBackoffStrategy{
+func NewExponentialBackoffStrategy(initialDelay, maxDelay time.Duration, maxAttempts int) ReconnectionStrategy {
+	return &exponentialBackoffStrategy{
 		InitialDelay: initialDelay,
 		MaxDelay:     maxDelay,
-		MaxAttempts:  maxAttempts,
+		maxAttempts:  maxAttempts,
 		Multiplier:   2.0,
 		Jitter:       true,
 		randSource:   rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
 }
 
-func (ebs *ExponentialBackoffStrategy) NextDelay(attempt int) time.Duration {
+func (ebs *exponentialBackoffStrategy) NextDelay(attempt int) time.Duration {
 	if attempt <= 0 {
 		return ebs.InitialDelay
 	}
@@ -65,17 +59,21 @@ func (ebs *ExponentialBackoffStrategy) NextDelay(attempt int) time.Duration {
 	return time.Duration(delay)
 }
 
-func (ebs *ExponentialBackoffStrategy) ShouldReconnect(attempt int, err error) bool {
-	return attempt < ebs.MaxAttempts
+func (ebs *exponentialBackoffStrategy) ShouldReconnect(attempt int, _ error) bool {
+	return attempt < ebs.maxAttempts
 }
 
-func (ebs *ExponentialBackoffStrategy) Reset() {
+func (ebs *exponentialBackoffStrategy) MaxAttempts() int {
+	return ebs.maxAttempts
 }
 
-type ReconnectManager struct {
-	connectionManager *ConnectionManager
-	strategy          ReconnectStrategy
-	logger            security.Logger
+func (ebs *exponentialBackoffStrategy) Reset() {
+}
+
+type reconnectManager struct {
+	connectionManager ConnectionManager
+	strategy          ReconnectionStrategy
+	logger            logging.ApplicationLogger
 
 	isReconnecting bool
 	reconnectMutex sync.Mutex
@@ -87,18 +85,18 @@ type ReconnectManager struct {
 }
 
 func NewReconnectManager(
-	connectionManager *ConnectionManager,
-	strategy ReconnectStrategy,
-	logger security.Logger,
-) *ReconnectManager {
-	return &ReconnectManager{
+	connectionManager ConnectionManager,
+	strategy ReconnectionStrategy,
+	logger logging.ApplicationLogger,
+) ReconnectManager {
+	return &reconnectManager{
 		connectionManager: connectionManager,
 		strategy:          strategy,
 		logger:            logger,
 	}
 }
 
-func (rm *ReconnectManager) SetCallbacks(
+func (rm *reconnectManager) SetCallbacks(
 	onStart func(int),
 	onFail func(int, error),
 	onSuccess func(int),
@@ -108,46 +106,100 @@ func (rm *ReconnectManager) SetCallbacks(
 	rm.onReconnectSuccess = onSuccess
 }
 
-func (rm *ReconnectManager) StartReconnection(ctx context.Context) {
+func (rm *reconnectManager) StopReconnection() {
+	rm.reconnectMutex.Lock()
+	defer rm.reconnectMutex.Unlock()
+	rm.isReconnecting = false
+}
+
+func (rm *reconnectManager) StartReconnection(ctx context.Context) error {
 	rm.reconnectMutex.Lock()
 	defer rm.reconnectMutex.Unlock()
 
 	if rm.isReconnecting {
 		rm.logger.Debug("Reconnection already in progress")
-		return
+		return nil
 	}
 
 	rm.isReconnecting = true
 	rm.currentAttempt = 0
 
 	go rm.reconnectLoop(ctx)
+	return nil
 }
 
-func (rm *ReconnectManager) reconnectLoop(ctx context.Context) {
+func (rm *reconnectManager) reconnectLoop(ctx context.Context) {
 	defer func() {
 		rm.reconnectMutex.Lock()
 		rm.isReconnecting = false
 		rm.reconnectMutex.Unlock()
 	}()
 
+	rm.logger.Info("🔄 Reconnection loop started - will continuously monitor connection and attempt reconnection on disconnection")
+
+	// Track the previous connection state to detect transitions
+	previousState := rm.connectionManager.GetState()
+
+	// Main monitoring loop - runs forever (until ctx.Done())
+	monitorTicker := time.NewTicker(500 * time.Millisecond)
+	defer monitorTicker.Stop()
+
+	reconnectInProgress := false
+
 	for {
 		select {
 		case <-ctx.Done():
-			rm.logger.Debug("Reconnection cancelled by context")
+			rm.logger.Error("❌ Reconnection loop CANCELLED BY CONTEXT")
 			return
+		case <-monitorTicker.C:
+			currentState := rm.connectionManager.GetState()
+
+			// Only trigger reconnection on state transition from connected → disconnected
+			// AND only if we're not already attempting reconnection
+			if !reconnectInProgress && previousState == StateConnected && currentState != StateConnected {
+				rm.logger.Error("🔴 Connection lost! Detected state transition from %s to %s - starting reconnection attempts", previousState.String(), currentState.String())
+				reconnectInProgress = true
+
+				// Start attempting reconnection
+				if err := rm.attemptReconnection(ctx); err != nil {
+					rm.logger.Error("❌ Reconnection sequence failed: %v", err)
+				}
+				reconnectInProgress = false
+
+				// Wait a bit before checking state again to let connection stabilize
+				time.Sleep(100 * time.Millisecond)
+				previousState = rm.connectionManager.GetState()
+			} else if !reconnectInProgress && currentState != previousState {
+				// Update previousState only when not reconnecting
+				previousState = currentState
+				rm.logger.Debug("📊 Connection state changed to: %s", currentState.String())
+			}
+		}
+	}
+}
+
+// attemptReconnection handles the actual reconnection logic with exponential backoff
+func (rm *reconnectManager) attemptReconnection(ctx context.Context) error {
+	rm.currentAttempt = 0
+
+	for {
+		select {
+		case <-ctx.Done():
+			rm.logger.Error("❌ Reconnection attempt CANCELLED BY CONTEXT after %d attempts", rm.currentAttempt)
+			return fmt.Errorf("context cancelled")
 		default:
 			rm.currentAttempt++
 
-			if !rm.strategy.ShouldReconnect(rm.currentAttempt, nil) {
-				rm.logger.Error("Max reconnection attempts reached: %d", rm.currentAttempt-1)
+			if rm.currentAttempt > rm.strategy.MaxAttempts() {
+				rm.logger.Error("🛑 Max reconnection attempts reached: %d attempts failed", rm.currentAttempt-1)
 				if rm.onReconnectFail != nil {
 					rm.onReconnectFail(rm.currentAttempt-1, fmt.Errorf("max attempts reached"))
 				}
-				return
+				return fmt.Errorf("max reconnection attempts exceeded")
 			}
 
 			delay := rm.strategy.NextDelay(rm.currentAttempt)
-			rm.logger.Debug("Attempting reconnection %d after %v delay", rm.currentAttempt, delay)
+			rm.logger.Info("🔄 Reconnection attempt #%d after %.1f second delay", rm.currentAttempt, delay.Seconds())
 
 			if rm.onReconnectStart != nil {
 				rm.onReconnectStart(rm.currentAttempt)
@@ -155,21 +207,21 @@ func (rm *ReconnectManager) reconnectLoop(ctx context.Context) {
 
 			select {
 			case <-ctx.Done():
-				return
+				rm.logger.Error("❌ Reconnection CANCELLED during delay at attempt %d", rm.currentAttempt)
+				return fmt.Errorf("context cancelled during delay")
 			case <-time.After(delay):
 			}
 
 			err := rm.connectionManager.Connect(ctx)
 			if err == nil {
-				rm.logger.Info("Reconnection successful after %d attempts", rm.currentAttempt)
+				rm.logger.Info("✅ Reconnection successful after %d attempts", rm.currentAttempt)
 				if rm.onReconnectSuccess != nil {
 					rm.onReconnectSuccess(rm.currentAttempt)
 				}
-				rm.strategy.Reset()
-				return
+				return nil // Successfully reconnected, exit attemptReconnection
 			}
 
-			rm.logger.Debug("Reconnection attempt %d failed: %v", rm.currentAttempt, err)
+			rm.logger.Error("❌ Reconnection attempt #%d failed: %v", rm.currentAttempt, err)
 			if rm.onReconnectFail != nil {
 				rm.onReconnectFail(rm.currentAttempt, err)
 			}
@@ -177,19 +229,19 @@ func (rm *ReconnectManager) reconnectLoop(ctx context.Context) {
 	}
 }
 
-func (rm *ReconnectManager) IsReconnecting() bool {
+func (rm *reconnectManager) IsReconnecting() bool {
 	rm.reconnectMutex.Lock()
 	defer rm.reconnectMutex.Unlock()
 	return rm.isReconnecting
 }
 
-func (rm *ReconnectManager) GetCurrentAttempt() int {
+func (rm *reconnectManager) GetCurrentAttempt() int {
 	rm.reconnectMutex.Lock()
 	defer rm.reconnectMutex.Unlock()
 	return rm.currentAttempt
 }
 
-func (rm *ReconnectManager) Stop() {
+func (rm *reconnectManager) Stop() {
 	rm.reconnectMutex.Lock()
 	defer rm.reconnectMutex.Unlock()
 	rm.isReconnecting = false

@@ -1,4 +1,4 @@
-package real_time
+package websocket
 
 import (
 	"encoding/json"
@@ -11,6 +11,15 @@ import (
 	hyperliquidsdk "github.com/sonirico/go-hyperliquid"
 )
 
+// MessageParser defines the interface for parsing WebSocket messages
+type MessageParser interface {
+	ParseOrderBook(msg hyperliquidsdk.WSMessage) (*OrderBookMessage, error)
+	ParseTrades(msg hyperliquidsdk.WSMessage) ([]TradeMessage, error)
+	ParsePosition(msg hyperliquidsdk.WSMessage) (*PositionMessage, error)
+	ParseAccountBalance(msg hyperliquidsdk.WSMessage) (*AccountBalanceMessage, error)
+	ParseKline(msg hyperliquidsdk.WSMessage) (*KlineMessage, error)
+}
+
 // Parser handles parsing of WebSocket messages into typed structs
 type Parser struct {
 	logger       logging.ApplicationLogger
@@ -18,7 +27,7 @@ type Parser struct {
 }
 
 // NewParser creates a new WebSocket message parser
-func NewParser(logger logging.ApplicationLogger, timeProvider temporal.TimeProvider) *Parser {
+func NewParser(logger logging.ApplicationLogger, timeProvider temporal.TimeProvider) MessageParser {
 	return &Parser{
 		logger:       logger,
 		timeProvider: timeProvider,

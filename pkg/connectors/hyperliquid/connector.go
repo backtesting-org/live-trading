@@ -1,41 +1,43 @@
 package hyperliquid
 
 import (
-	"context"
 	"fmt"
 	"sync"
 
 	"github.com/backtesting-org/kronos-sdk/pkg/types/connector"
 	"github.com/backtesting-org/kronos-sdk/pkg/types/logging"
 	"github.com/backtesting-org/kronos-sdk/pkg/types/temporal"
-	"github.com/backtesting-org/live-trading/pkg/connectors/hyperliquid/clients"
-	"github.com/backtesting-org/live-trading/pkg/connectors/hyperliquid/data"
-	"github.com/backtesting-org/live-trading/pkg/connectors/hyperliquid/data/real_time"
-	"github.com/backtesting-org/live-trading/pkg/connectors/hyperliquid/trading"
+	"github.com/backtesting-org/live-trading/pkg/connectors/hyperliquid/adaptors"
+	"github.com/backtesting-org/live-trading/pkg/connectors/hyperliquid/rest"
+	"github.com/backtesting-org/live-trading/pkg/connectors/hyperliquid/websocket"
 )
 
 // hyperliquid implements Connector and Initializable interfaces
 type hyperliquid struct {
-	exchangeClient clients.ExchangeClient
-	infoClient     clients.InfoClient
-	wsClient       clients.WebSocketClient
-	marketData     data.MarketDataService
-	trading        trading.TradingService
-	realTime       real_time.RealTimeService
+	exchangeClient adaptors.ExchangeClient
+	infoClient     adaptors.InfoClient
+	marketData     rest.MarketDataService
+	trading        rest.TradingService
+	realTime       websocket.RealTimeService
 	config         *Config
 	appLogger      logging.ApplicationLogger
 	tradingLogger  logging.TradingLogger
 	timeProvider   temporal.TimeProvider
-	ctx            context.Context
 	initialized    bool
 
 	// WebSocket channels
-	orderBookCh chan connector.OrderBook
-	tradeCh     chan connector.Trade
-	positionCh  chan connector.Position
-	balanceCh   chan connector.AccountBalance
-	klineCh     chan connector.Kline
-	errorCh     chan error
+	tradeCh    chan connector.Trade
+	positionCh chan connector.Position
+	balanceCh  chan connector.AccountBalance
+	errorCh    chan error
+
+	// Separate channels per orderbook subscription (key: "BTC", "ETH", etc.)
+	orderBookChannels map[string]chan connector.OrderBook
+	orderBookMu       sync.RWMutex
+
+	// Separate channels per kline subscription (key: "BTC:1m", "ETH:5m", etc.)
+	klineChannels map[string]chan connector.Kline
+	klineMu       sync.RWMutex
 
 	// Subscription tracking
 	subscriptions map[string]int
@@ -48,36 +50,33 @@ var _ connector.WebSocketConnector = (*hyperliquid)(nil)
 
 // NewHyperliquid creates a new Hyperliquid connector
 func NewHyperliquid(
-	exchangeClient clients.ExchangeClient,
-	infoClient clients.InfoClient,
-	wsClient clients.WebSocketClient,
-	tradingService trading.TradingService,
-	marketDataService data.MarketDataService,
-	realTimeService real_time.RealTimeService,
+	exchangeClient adaptors.ExchangeClient,
+	infoClient adaptors.InfoClient,
+	tradingService rest.TradingService,
+	marketDataService rest.MarketDataService,
+	realTimeService websocket.RealTimeService,
 	appLogger logging.ApplicationLogger,
 	tradingLogger logging.TradingLogger,
 	timeProvider temporal.TimeProvider,
 ) connector.Connector {
 	return &hyperliquid{
-		exchangeClient: exchangeClient,
-		infoClient:     infoClient,
-		wsClient:       wsClient,
-		trading:        tradingService,
-		marketData:     marketDataService,
-		realTime:       realTimeService,
-		config:         nil, // Will be set during initialization
-		appLogger:      appLogger,
-		tradingLogger:  tradingLogger,
-		timeProvider:   timeProvider,
-		ctx:            context.Background(),
-		initialized:    false,
-		orderBookCh:    make(chan connector.OrderBook, 100),
-		tradeCh:        make(chan connector.Trade, 100),
-		positionCh:     make(chan connector.Position, 100),
-		balanceCh:      make(chan connector.AccountBalance, 100),
-		klineCh:        make(chan connector.Kline, 100),
-		errorCh:        make(chan error, 100),
-		subscriptions:  make(map[string]int),
+		exchangeClient:    exchangeClient,
+		infoClient:        infoClient,
+		trading:           tradingService,
+		marketData:        marketDataService,
+		realTime:          realTimeService,
+		config:            nil, // Will be set during initialization
+		appLogger:         appLogger,
+		tradingLogger:     tradingLogger,
+		timeProvider:      timeProvider,
+		initialized:       false,
+		tradeCh:           make(chan connector.Trade, 100),
+		positionCh:        make(chan connector.Position, 100),
+		balanceCh:         make(chan connector.AccountBalance, 100),
+		orderBookChannels: make(map[string]chan connector.OrderBook),
+		klineChannels:     make(map[string]chan connector.Kline),
+		errorCh:           make(chan error, 100),
+		subscriptions:     make(map[string]int),
 	}
 }
 
@@ -99,10 +98,6 @@ func (h *hyperliquid) Initialize(config connector.Config) error {
 
 	if err := h.infoClient.Configure(hlConfig.BaseURL); err != nil {
 		return fmt.Errorf("failed to configure info client: %w", err)
-	}
-
-	if err := h.wsClient.Configure(hlConfig.BaseURL, hlConfig.PrivateKey); err != nil {
-		return fmt.Errorf("failed to configure websocket client: %w", err)
 	}
 
 	h.config = hlConfig

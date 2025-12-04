@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-type RateLimiter struct {
+type rateLimiter struct {
 	tokens     int
 	capacity   int
 	refillRate time.Duration
@@ -13,8 +13,8 @@ type RateLimiter struct {
 	mutex      sync.Mutex
 }
 
-func NewRateLimiter(capacity int, refillRate time.Duration) *RateLimiter {
-	return &RateLimiter{
+func NewRateLimiter(capacity int, refillRate time.Duration) RateLimiter {
+	return &rateLimiter{
 		tokens:     capacity,
 		capacity:   capacity,
 		refillRate: refillRate,
@@ -22,7 +22,7 @@ func NewRateLimiter(capacity int, refillRate time.Duration) *RateLimiter {
 	}
 }
 
-func (rl *RateLimiter) Allow() bool {
+func (rl *rateLimiter) Allow() bool {
 	rl.mutex.Lock()
 	defer rl.mutex.Unlock()
 
@@ -40,7 +40,7 @@ func (rl *RateLimiter) Allow() bool {
 	return false
 }
 
-func (rl *RateLimiter) Reset() {
+func (rl *rateLimiter) Reset() {
 	rl.mutex.Lock()
 	defer rl.mutex.Unlock()
 	rl.tokens = rl.capacity

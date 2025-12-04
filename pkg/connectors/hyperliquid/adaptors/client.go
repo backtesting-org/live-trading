@@ -1,4 +1,4 @@
-package clients
+package adaptors
 
 import (
 	"fmt"
@@ -22,13 +22,6 @@ type InfoClient interface {
 	GetInfo() (*hyperliquid.Info, error)
 }
 
-// WebSocketClient interface for real-time data with lazy configuration
-type WebSocketClient interface {
-	Configure(baseURL, privateKey string) error
-	IsConfigured() bool
-	GetWebSocket() (*hyperliquid.WebsocketClient, error)
-}
-
 // exchangeClient implementation
 type exchangeClient struct {
 	exchange   *hyperliquid.Exchange
@@ -39,13 +32,6 @@ type exchangeClient struct {
 // infoClient implementation
 type infoClient struct {
 	info       *hyperliquid.Info
-	configured bool
-	mu         sync.RWMutex
-}
-
-// webSocketClient implementation
-type webSocketClient struct {
-	ws         *hyperliquid.WebsocketClient
 	configured bool
 	mu         sync.RWMutex
 }
@@ -134,41 +120,4 @@ func (i *infoClient) GetInfo() (*hyperliquid.Info, error) {
 		return nil, fmt.Errorf("info client not configured")
 	}
 	return i.info, nil
-}
-
-// NewWebSocketClient creates an unconfigured websocket client
-func NewWebSocketClient() WebSocketClient {
-	return &webSocketClient{
-		configured: false,
-	}
-}
-
-// Configure sets up the websocket client with runtime config
-func (w *webSocketClient) Configure(baseURL, privateKey string) error {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-
-	if w.configured {
-		return fmt.Errorf("client already configured")
-	}
-
-	w.ws = hyperliquid.NewWebsocketClient(baseURL)
-	w.configured = true
-	return nil
-}
-
-func (w *webSocketClient) IsConfigured() bool {
-	w.mu.RLock()
-	defer w.mu.RUnlock()
-	return w.configured
-}
-
-func (w *webSocketClient) GetWebSocket() (*hyperliquid.WebsocketClient, error) {
-	w.mu.RLock()
-	defer w.mu.RUnlock()
-
-	if !w.configured {
-		return nil, fmt.Errorf("websocket client not configured")
-	}
-	return w.ws, nil
 }

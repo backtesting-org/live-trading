@@ -18,8 +18,8 @@ import (
 var _ WebSocketService = (*service)(nil)
 
 type service struct {
-	connectionManager *connection.ConnectionManager
-	reconnectManager  *connection.ReconnectManager
+	connectionManager connection.ConnectionManager
+	reconnectManager  connection.ReconnectManager
 	handlerRegistry   *base.HandlerRegistry
 	subManager        *subscriptionManager
 
@@ -86,7 +86,9 @@ func NewService(
 	return service
 }
 
-func (s *service) Connect(ctx context.Context) error {
+func (s *service) Connect() error {
+	ctx := context.Background()
+
 	return s.connectionManager.Connect(ctx)
 }
 
@@ -106,8 +108,8 @@ func (s *service) ErrorChannel() <-chan error {
 	return s.errorChan
 }
 
-func (s *service) StartWebSocket(ctx context.Context) error {
-	return s.Connect(ctx)
+func (s *service) StartWebSocket() error {
+	return s.Connect()
 }
 
 func (s *service) StopWebSocket() error {

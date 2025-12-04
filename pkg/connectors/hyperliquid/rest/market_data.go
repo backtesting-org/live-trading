@@ -1,9 +1,9 @@
-package data
+package rest
 
 import (
 	"fmt"
 
-	"github.com/backtesting-org/live-trading/pkg/connectors/hyperliquid/clients"
+	"github.com/backtesting-org/live-trading/pkg/connectors/hyperliquid/adaptors"
 	"github.com/sonirico/go-hyperliquid"
 )
 
@@ -31,12 +31,12 @@ type MarketDataService interface {
 
 // marketDataService implementation
 type marketDataService struct {
-	client clients.InfoClient
+	client adaptors.InfoClient
 }
 
 var millisecondsPerSecond = int64(1000)
 
-func NewMarketDataService(client clients.InfoClient) MarketDataService {
+func NewMarketDataService(client adaptors.InfoClient) MarketDataService {
 	return &marketDataService{client: client}
 }
 

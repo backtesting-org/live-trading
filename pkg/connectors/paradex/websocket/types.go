@@ -1,7 +1,6 @@
 package websockets
 
 import (
-	"context"
 	"time"
 
 	"github.com/backtesting-org/kronos-sdk/pkg/types/kronos/numerical"
@@ -10,10 +9,10 @@ import (
 // WebSocketService defines the interface for WebSocket-based exchange connectivity
 type WebSocketService interface {
 	// Connection management
-	Connect(ctx context.Context) error
+	Connect() error
 	Disconnect() error
 	IsConnected() bool
-	StartWebSocket(ctx context.Context) error
+	StartWebSocket() error
 	StopWebSocket() error
 	IsWebSocketConnected() bool
 

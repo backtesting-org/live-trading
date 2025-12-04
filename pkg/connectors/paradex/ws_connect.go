@@ -1,11 +1,10 @@
 package paradex
 
 import (
-	"context"
 	"fmt"
 )
 
-func (p *paradex) StartWebSocket(ctx context.Context) error {
+func (p *paradex) StartWebSocket() error {
 	p.wsMutex.Lock()
 	defer p.wsMutex.Unlock()
 
@@ -17,9 +16,7 @@ func (p *paradex) StartWebSocket(ctx context.Context) error {
 		return nil
 	}
 
-	p.wsContext, p.wsCancel = context.WithCancel(ctx)
-
-	if err := p.wsService.Connect(p.wsContext); err != nil {
+	if err := p.wsService.Connect(); err != nil {
 		return fmt.Errorf("failed to start paradex WebSocket: %w", err)
 	}
 

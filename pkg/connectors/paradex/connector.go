@@ -30,6 +30,16 @@ type paradex struct {
 	wsContext context.Context
 	wsCancel  context.CancelFunc
 	wsMutex   sync.RWMutex
+
+	tradeCh chan connector.Trade
+
+	// Separate channels per orderbook subscription (key: "BTC", "ETH", etc.)
+	orderBookChannels map[string]chan connector.OrderBook
+	orderBookMu       sync.RWMutex
+
+	// Separate channels per kline subscription (key: "BTC:1m", "ETH:5m", etc.)
+	klineChannels map[string]chan connector.Kline
+	klineMu       sync.RWMutex
 }
 
 // Ensure paradex implements all interfaces at compile time
@@ -42,14 +52,17 @@ func NewParadex(
 	timeProvider temporal.TimeProvider,
 ) connector.Connector {
 	return &paradex{
-		paradexService: nil, // Will be created during initialization
-		wsService:      nil, // Will be created during initialization
-		config:         nil, // Will be set during initialization
-		appLogger:      appLogger,
-		tradingLogger:  tradingLogger,
-		timeProvider:   timeProvider,
-		ctx:            context.Background(),
-		initialized:    false,
+		paradexService:    nil, // Will be created during initialization
+		wsService:         nil, // Will be created during initialization
+		config:            nil, // Will be set during initialization
+		appLogger:         appLogger,
+		tradingLogger:     tradingLogger,
+		timeProvider:      timeProvider,
+		ctx:               context.Background(),
+		initialized:       false,
+		orderBookChannels: make(map[string]chan connector.OrderBook),
+		klineChannels:     make(map[string]chan connector.Kline),
+		tradeCh:           make(chan connector.Trade, 100),
 	}
 }
 

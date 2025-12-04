@@ -1,7 +1,6 @@
 package bybit
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/backtesting-org/kronos-sdk/pkg/types/connector"
@@ -9,11 +8,11 @@ import (
 )
 
 // StartWebSocket starts the WebSocket connection for real-time data
-func (b *bybit) StartWebSocket(ctx context.Context) error {
+func (b *bybit) StartWebSocket() error {
 	if !b.initialized {
 		return fmt.Errorf("connector not initialized")
 	}
-	return b.realTime.Connect(ctx)
+	return b.realTime.Connect()
 }
 
 // StopWebSocket stops the WebSocket connection
@@ -25,7 +24,7 @@ func (b *bybit) Connect() error {
 	if !b.initialized {
 		return fmt.Errorf("connector not initialized")
 	}
-	return b.realTime.Connect(b.ctx)
+	return b.realTime.Connect()
 }
 
 func (b *bybit) Disconnect() error {
