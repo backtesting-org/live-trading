@@ -299,24 +299,18 @@ func (ws *WebSocketService) subscribeToChannel(channel, coin, interval string, c
 	// Register message handler for this channel if not already registered
 	ws.handlersMu.Lock()
 	if _, exists := ws.messageHandlers[channel]; !exists {
-		fmt.Printf("🟢 Registering NEW message handler for channel '%s'\n", channel)
 		ws.messageHandlers[channel] = func(data []byte) error {
-			fmt.Printf("🔵 MESSAGE HANDLER INVOKED for channel '%s'\n", channel)
 			return ws.routeMessageToSubscriptions(channel, data)
 		}
-	} else {
-		fmt.Printf("🟡 Message handler ALREADY EXISTS for channel '%s'\n", channel)
 	}
+
 	ws.handlersMu.Unlock()
 
-	fmt.Printf("🟢 About to call sendSubscription for %s/%s/%s\n", channel, coin, interval)
 	err := ws.sendSubscription(channel, coin, interval)
 	if err != nil {
-		fmt.Printf("🔴 sendSubscription FAILED: %v\n", err)
 		return 0, err
 	}
 
-	fmt.Printf("🟢 subscribeToChannel SUCCESS: subID=%d\n", subID)
 	return subID, nil
 }
 
@@ -336,11 +330,9 @@ func (ws *WebSocketService) extractOrderBookCoin(data json.RawMessage) string {
 	}
 
 	if coinVal, ok := msgData["coin"].(string); ok {
-		fmt.Printf("🟢 extractOrderBookCoin: Found coin='%s'\n", coinVal)
 		return coinVal
 	}
 
-	fmt.Printf("🔴 extractOrderBookCoin: No 'coin' field found in data: %+v\n", msgData)
 	return ""
 }
 
@@ -355,16 +347,10 @@ func (ws *WebSocketService) extractCandleMetadata(data json.RawMessage) (coin, i
 
 	if symbolVal, ok := msgData["s"].(string); ok {
 		coin = symbolVal
-		fmt.Printf("🟢 extractCandleMetadata: Found symbol='%s'\n", coin)
-	} else {
-		fmt.Printf("🔴 extractCandleMetadata: No 's' field found\n")
 	}
 
 	if intervalVal, ok := msgData["i"].(string); ok {
 		interval = intervalVal
-		fmt.Printf("🟢 extractCandleMetadata: Found interval='%s'\n", interval)
-	} else {
-		fmt.Printf("🔴 extractCandleMetadata: No 'i' field found\n")
 	}
 
 	return coin, interval
@@ -372,8 +358,6 @@ func (ws *WebSocketService) extractCandleMetadata(data json.RawMessage) (coin, i
 
 // routeMessageToSubscriptions routes incoming messages to matching subscriptions using O(1) index lookup
 func (ws *WebSocketService) routeMessageToSubscriptions(channel string, data []byte) error {
-	fmt.Printf("🔵 routeMessageToSubscriptions CALLED for channel '%s'\n", channel)
-
 	var msgWrapper struct {
 		Channel string          `json:"channel"`
 		Data    json.RawMessage `json:"data"`
@@ -390,17 +374,14 @@ func (ws *WebSocketService) routeMessageToSubscriptions(channel string, data []b
 	switch channel {
 	case "l2Book":
 		coin = ws.extractOrderBookCoin(msgWrapper.Data)
-		fmt.Printf("🔵 Extracted l2Book coin=%s\n", coin)
 	case "candle":
 		coin, interval = ws.extractCandleMetadata(msgWrapper.Data)
-		fmt.Printf("🔵 Extracted candle coin=%s, interval=%s\n", coin, interval)
 	default:
 		fmt.Printf("🔴 Unknown channel type '%s' for metadata extraction\n", channel)
 	}
 
 	// Build index key for O(1) lookup
 	indexKey := buildIndexKey(channel, coin, interval)
-	fmt.Printf("🔍 Looking up subscriptions with key '%s'\n", indexKey)
 
 	// Direct O(1) lookup in index
 	ws.indexMu.RLock()
@@ -413,8 +394,6 @@ func (ws *WebSocketService) routeMessageToSubscriptions(channel string, data []b
 		return nil
 	}
 
-	fmt.Printf("✅ Found %d subscription(s) for key '%s'\n", len(subscriptions), indexKey)
-
 	// Parse as hyperliquid.WSMessage
 	msg := hyperliquid.WSMessage{
 		Channel: msgWrapper.Channel,
@@ -424,11 +403,7 @@ func (ws *WebSocketService) routeMessageToSubscriptions(channel string, data []b
 	// Call all matching callbacks
 	for _, sub := range subscriptions {
 		if sub.Callback != nil {
-			fmt.Printf("🎯 Calling callback for subscription #%d (%s:%s:%s)\n", sub.ID, sub.Channel, sub.Coin, sub.Interval)
 			sub.Callback(msg)
-			fmt.Printf("✅ Callback completed for subscription #%d\n", sub.ID)
-		} else {
-			fmt.Printf("⚠️  Callback is NIL for subscription #%d\n", sub.ID)
 		}
 	}
 
