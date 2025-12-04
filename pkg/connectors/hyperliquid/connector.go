@@ -1,31 +1,28 @@
 package hyperliquid
 
 import (
-	"context"
 	"fmt"
 	"sync"
 
 	"github.com/backtesting-org/kronos-sdk/pkg/types/connector"
 	"github.com/backtesting-org/kronos-sdk/pkg/types/logging"
 	"github.com/backtesting-org/kronos-sdk/pkg/types/temporal"
-	"github.com/backtesting-org/live-trading/pkg/connectors/hyperliquid/clients"
-	"github.com/backtesting-org/live-trading/pkg/connectors/hyperliquid/data"
-	"github.com/backtesting-org/live-trading/pkg/connectors/hyperliquid/data/real_time"
-	"github.com/backtesting-org/live-trading/pkg/connectors/hyperliquid/trading"
+	"github.com/backtesting-org/live-trading/pkg/connectors/hyperliquid/adaptors"
+	"github.com/backtesting-org/live-trading/pkg/connectors/hyperliquid/rest"
+	"github.com/backtesting-org/live-trading/pkg/connectors/hyperliquid/websocket"
 )
 
 // hyperliquid implements Connector and Initializable interfaces
 type hyperliquid struct {
-	exchangeClient clients.ExchangeClient
-	infoClient     clients.InfoClient
-	marketData     data.MarketDataService
-	trading        trading.TradingService
-	realTime       real_time.RealTimeService
+	exchangeClient adaptors.ExchangeClient
+	infoClient     adaptors.InfoClient
+	marketData     rest.MarketDataService
+	trading        rest.TradingService
+	realTime       websocket.RealTimeService
 	config         *Config
 	appLogger      logging.ApplicationLogger
 	tradingLogger  logging.TradingLogger
 	timeProvider   temporal.TimeProvider
-	ctx            context.Context
 	initialized    bool
 
 	// WebSocket channels
@@ -53,11 +50,11 @@ var _ connector.WebSocketConnector = (*hyperliquid)(nil)
 
 // NewHyperliquid creates a new Hyperliquid connector
 func NewHyperliquid(
-	exchangeClient clients.ExchangeClient,
-	infoClient clients.InfoClient,
-	tradingService trading.TradingService,
-	marketDataService data.MarketDataService,
-	realTimeService real_time.RealTimeService,
+	exchangeClient adaptors.ExchangeClient,
+	infoClient adaptors.InfoClient,
+	tradingService rest.TradingService,
+	marketDataService rest.MarketDataService,
+	realTimeService websocket.RealTimeService,
 	appLogger logging.ApplicationLogger,
 	tradingLogger logging.TradingLogger,
 	timeProvider temporal.TimeProvider,
@@ -72,7 +69,6 @@ func NewHyperliquid(
 		appLogger:         appLogger,
 		tradingLogger:     tradingLogger,
 		timeProvider:      timeProvider,
-		ctx:               context.Background(),
 		initialized:       false,
 		tradeCh:           make(chan connector.Trade, 100),
 		positionCh:        make(chan connector.Position, 100),

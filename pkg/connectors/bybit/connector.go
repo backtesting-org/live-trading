@@ -25,13 +25,19 @@ type bybit struct {
 	ctx           context.Context
 	initialized   bool
 
+	// Separate channels per orderbook subscription (key: "BTC", "ETH", etc.)
+	orderBookChannels map[string]chan connector.OrderBook
+	orderBookMu       sync.RWMutex
+
+	// Separate channels per kline subscription (key: "BTC:1m", "ETH:5m", etc.)
+	klineChannels map[string]chan connector.Kline
+	klineMu       sync.RWMutex
+
 	// WebSocket channels
-	orderBookCh chan connector.OrderBook
-	tradeCh     chan connector.Trade
-	positionCh  chan connector.Position
-	balanceCh   chan connector.AccountBalance
-	klineCh     chan connector.Kline
-	errorCh     chan error
+	tradeCh    chan connector.Trade
+	positionCh chan connector.Position
+	balanceCh  chan connector.AccountBalance
+	errorCh    chan error
 
 	// Subscription tracking
 	subscriptions map[string]int
@@ -59,13 +65,14 @@ func NewBybit(
 		timeProvider:  timeProvider,
 		ctx:           context.Background(),
 		initialized:   false,
-		orderBookCh:   make(chan connector.OrderBook, 100),
 		tradeCh:       make(chan connector.Trade, 100),
 		positionCh:    make(chan connector.Position, 100),
 		balanceCh:     make(chan connector.AccountBalance, 100),
-		klineCh:       make(chan connector.Kline, 100),
 		errorCh:       make(chan error, 100),
 		subscriptions: make(map[string]int),
+
+		orderBookChannels: make(map[string]chan connector.OrderBook),
+		klineChannels:     make(map[string]chan connector.Kline),
 	}
 }
 

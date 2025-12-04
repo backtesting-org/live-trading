@@ -3,23 +3,22 @@ package hyperliquid
 import (
 	"github.com/backtesting-org/kronos-sdk/pkg/types/connector"
 	"github.com/backtesting-org/kronos-sdk/pkg/types/registry"
-	"github.com/backtesting-org/live-trading/pkg/connectors/hyperliquid/clients"
-	"github.com/backtesting-org/live-trading/pkg/connectors/hyperliquid/data"
-	"github.com/backtesting-org/live-trading/pkg/connectors/hyperliquid/data/real_time"
-	"github.com/backtesting-org/live-trading/pkg/connectors/hyperliquid/trading"
+	"github.com/backtesting-org/live-trading/pkg/connectors/hyperliquid/adaptors"
+	"github.com/backtesting-org/live-trading/pkg/connectors/hyperliquid/rest"
+	"github.com/backtesting-org/live-trading/pkg/connectors/hyperliquid/websocket"
 	"github.com/backtesting-org/live-trading/pkg/connectors/types"
 	"go.uber.org/fx"
 )
 
 // Module is the main Hyperliquid connector module
 var Module = fx.Options(
-	real_time.WebSocketModule,
+	websocket.WebSocketModule,
 
 	fx.Provide(
-		clients.NewExchangeClient,
-		clients.NewInfoClient,
-		trading.NewTradingService,
-		data.NewMarketDataService,
+		adaptors.NewExchangeClient,
+		adaptors.NewInfoClient,
+		rest.NewTradingService,
+		rest.NewMarketDataService,
 		fx.Annotate(
 			NewHyperliquid,
 			fx.ResultTags(`name:"hyperliquid"`),

@@ -1,17 +1,16 @@
 package hyperliquid
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/backtesting-org/kronos-sdk/pkg/types/connector"
 	"github.com/backtesting-org/kronos-sdk/pkg/types/portfolio"
-	"github.com/backtesting-org/live-trading/pkg/connectors/hyperliquid/data/real_time"
+	"github.com/backtesting-org/live-trading/pkg/connectors/hyperliquid/websocket"
 	"github.com/backtesting-org/live-trading/pkg/connectors/types"
 )
 
 // StartWebSocket starts the WebSocket connection for real-time data
-func (h *hyperliquid) StartWebSocket(ctx context.Context) error {
+func (h *hyperliquid) StartWebSocket() error {
 	if !h.initialized {
 		return fmt.Errorf("connector not initialized")
 	}
@@ -116,7 +115,7 @@ func (h *hyperliquid) SubscribeOrderBook(asset portfolio.Asset, instrumentType c
 	}
 	h.orderBookMu.Unlock()
 
-	subID, err := h.realTime.SubscribeToOrderBook(symbol, func(obMsg *real_time.OrderBookMessage) {
+	subID, err := h.realTime.SubscribeToOrderBook(symbol, func(obMsg *websocket.OrderBookMessage) {
 		bids := make([]connector.PriceLevel, len(obMsg.Bids))
 		for i, bid := range obMsg.Bids {
 			bids[i] = connector.PriceLevel{
@@ -187,7 +186,7 @@ func (h *hyperliquid) SubscribeTrades(asset portfolio.Asset, instrumentType conn
 
 	symbol := h.normaliseAssetName(asset)
 
-	subID, err := h.realTime.SubscribeToTrades(symbol, func(trades []real_time.TradeMessage) {
+	subID, err := h.realTime.SubscribeToTrades(symbol, func(trades []websocket.TradeMessage) {
 		for _, trade := range trades {
 			select {
 			case h.tradeCh <- connector.Trade{
@@ -240,7 +239,7 @@ func (h *hyperliquid) SubscribePositions(asset portfolio.Asset, instrumentType c
 
 	symbol := h.normaliseAssetName(asset)
 
-	subID, err := h.realTime.SubscribeToPositions(h.config.AccountAddress, func(posMsg *real_time.PositionMessage) {
+	subID, err := h.realTime.SubscribeToPositions(h.config.AccountAddress, func(posMsg *websocket.PositionMessage) {
 		if posMsg.Coin != symbol {
 			return
 		}
@@ -302,7 +301,7 @@ func (h *hyperliquid) SubscribeAccountBalance() error {
 		return fmt.Errorf("connector not initialized")
 	}
 
-	subID, err := h.realTime.SubscribeToAccountBalance(h.config.AccountAddress, func(balMsg *real_time.AccountBalanceMessage) {
+	subID, err := h.realTime.SubscribeToAccountBalance(h.config.AccountAddress, func(balMsg *websocket.AccountBalanceMessage) {
 		select {
 		case h.balanceCh <- connector.AccountBalance{
 			TotalBalance:     balMsg.TotalAccountValue,
@@ -360,7 +359,7 @@ func (h *hyperliquid) SubscribeKlines(asset portfolio.Asset, interval string) er
 	h.klineChannels[channelKey] = klineCh
 	h.klineMu.Unlock()
 
-	subID, err := h.realTime.SubscribeToKlines(symbol, interval, func(klineMsg *real_time.KlineMessage) {
+	subID, err := h.realTime.SubscribeToKlines(symbol, interval, func(klineMsg *websocket.KlineMessage) {
 		// CRITICAL: Only process klines matching the subscribed interval
 		// Hyperliquid sends ALL intervals even if you only subscribe to one
 		if klineMsg.Interval != interval {

@@ -1,7 +1,6 @@
 package real_time
 
 import (
-	"context"
 	"fmt"
 	"reflect"
 	"sync"
@@ -22,7 +21,7 @@ type Config struct {
 
 type RealTimeService interface {
 	Initialize(config *Config) error
-	Connect(ctx context.Context) error
+	Connect() error
 	Disconnect() error
 	SubscribeOrderBook(asset portfolio.Asset, instrument connector.Instrument) error
 	UnsubscribeOrderBook(asset portfolio.Asset, instrument connector.Instrument) error
@@ -70,7 +69,7 @@ func (r *realTimeService) Initialize(config *Config) error {
 	return nil
 }
 
-func (r *realTimeService) Connect(ctx context.Context) error {
+func (r *realTimeService) Connect() error {
 	r.mu.RLock()
 	ws := r.websocket
 	r.mu.RUnlock()

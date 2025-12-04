@@ -1,9 +1,9 @@
-package trading
+package rest
 
 import (
 	"fmt"
 
-	"github.com/backtesting-org/live-trading/pkg/connectors/hyperliquid/clients"
+	"github.com/backtesting-org/live-trading/pkg/connectors/hyperliquid/adaptors"
 	hyperliquid "github.com/sonirico/go-hyperliquid"
 )
 
@@ -37,11 +37,11 @@ type TradingService interface {
 
 // tradingService implementation
 type tradingService struct {
-	client clients.ExchangeClient
+	client adaptors.ExchangeClient
 }
 
 // NewTradingService creates a new trading service
-func NewTradingService(client clients.ExchangeClient) TradingService {
+func NewTradingService(client adaptors.ExchangeClient) TradingService {
 	return &tradingService{client: client}
 }
 

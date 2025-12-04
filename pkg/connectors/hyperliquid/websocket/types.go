@@ -1,4 +1,4 @@
-package real_time
+package websocket
 
 import (
 	"time"

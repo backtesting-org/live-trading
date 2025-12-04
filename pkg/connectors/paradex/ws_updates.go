@@ -5,28 +5,36 @@ import (
 	"github.com/backtesting-org/kronos-sdk/pkg/types/kronos/numerical"
 )
 
-func (p *paradex) OrderBookUpdates() <-chan connector.OrderBook {
-	if p.wsService == nil {
-		ch := make(chan connector.OrderBook)
-		close(ch)
-		return ch
+func (p *paradex) GetKlineChannels() map[string]<-chan connector.Kline {
+	p.klineMu.RLock()
+	defer p.klineMu.RUnlock()
+
+	result := make(map[string]<-chan connector.Kline, len(p.klineChannels))
+	for key, ch := range p.klineChannels {
+		result[key] = ch
 	}
 
-	convertedChan := make(chan connector.OrderBook, 100)
-	go p.convertOrderBookUpdates(convertedChan)
-	return convertedChan
+	p.appLogger.Info("📊 Returning %d kline channels", len(result))
+	return result
 }
 
-func (p *paradex) TradeUpdates() <-chan connector.Trade {
-	if p.wsService == nil {
-		ch := make(chan connector.Trade)
-		close(ch)
-		return ch
+// GetOrderBookChannels returns all active orderbook channels
+func (p *paradex) GetOrderBookChannels() map[string]<-chan connector.OrderBook {
+	p.orderBookMu.RLock()
+	defer p.orderBookMu.RUnlock()
+
+	result := make(map[string]<-chan connector.OrderBook, len(p.orderBookChannels))
+	for key, ch := range p.orderBookChannels {
+		result[key] = ch
 	}
 
-	convertedChan := make(chan connector.Trade, 100)
-	go p.convertTradeUpdates(convertedChan)
-	return convertedChan
+	p.appLogger.Info("📊 Returning %d orderbook channels", len(result))
+	return result
+}
+
+// TradeUpdates returns a channel for trade updates
+func (p *paradex) TradeUpdates() <-chan connector.Trade {
+	return p.tradeCh
 }
 
 func (p *paradex) PositionUpdates() <-chan connector.Position {
@@ -52,19 +60,6 @@ func (p *paradex) AccountBalanceUpdates() <-chan connector.AccountBalance {
 	// TODO: Implement actual account balance updates conversion
 	convertedChan := make(chan connector.AccountBalance, 100)
 	go p.convertAccountBalanceUpdates(convertedChan)
-	return convertedChan
-}
-
-func (p *paradex) KlineUpdates() <-chan connector.Kline {
-	if p.wsService == nil {
-		ch := make(chan connector.Kline)
-		close(ch)
-		return ch
-	}
-
-	// TODO: Implement actual kline updates conversion
-	convertedChan := make(chan connector.Kline, 100)
-	go p.convertKlineUpdates(convertedChan)
 	return convertedChan
 }
 
