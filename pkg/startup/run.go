@@ -18,6 +18,7 @@ type Startup interface {
 		connectors map[connector.ExchangeName]connector.Config,
 		assets map[portfolio.Asset][]connector.Instrument,
 	) error
+	Stop() error
 }
 
 func NewStartup(
@@ -42,6 +43,8 @@ type startup struct {
 	pluginManager     plugin.Manager
 	runtime           runtime.Runtime
 	logger            logging.ApplicationLogger
+	ctx               context.Context
+	cancel            context.CancelFunc
 }
 
 // Start runs the trading strategy
@@ -50,7 +53,7 @@ func (r *startup) Start(
 	connectors map[connector.ExchangeName]connector.Config,
 	assets map[portfolio.Asset][]connector.Instrument,
 ) error {
-	ctx := context.Background()
+	r.ctx, r.cancel = context.WithCancel(context.Background())
 
 	bootConfig := runtime.BootConfig{
 		StrategyPath:   strategyPath,
@@ -82,11 +85,22 @@ func (r *startup) Start(
 		}
 	}
 
-	err := r.runtime.Boot(ctx, bootConfig)
+	err := r.runtime.Boot(r.ctx, bootConfig)
 	if err != nil {
 		r.logger.Error(fmt.Sprintf("runtime boot failed: %s", err.Error()))
 		return err
 	}
 
 	return nil
+}
+
+// Stop gracefully shuts down the runtime
+func (r *startup) Stop() error {
+	r.logger.Info("stopping startup service")
+
+	if r.cancel != nil {
+		r.cancel()
+	}
+
+	return r.runtime.Stop(r.ctx)
 }
