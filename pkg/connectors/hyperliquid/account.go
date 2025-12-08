@@ -2,6 +2,7 @@ package hyperliquid
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/backtesting-org/kronos-sdk/pkg/types/connector"
 	"github.com/backtesting-org/kronos-sdk/pkg/types/kronos/numerical"
@@ -91,5 +92,45 @@ func (h *hyperliquid) GetPositions() ([]connector.Position, error) {
 
 // GetTradingHistory retrieves trading history for the specified symbol
 func (h *hyperliquid) GetTradingHistory(symbol string, limit int) ([]connector.Trade, error) {
-	return nil, fmt.Errorf("GetTradingHistory not yet implemented for Hyperliquid")
+	fills, err := h.marketData.GetUserFills(h.config.AccountAddress)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get user fills: %w", err)
+	}
+
+	trades := make([]connector.Trade, 0, limit)
+	for _, fill := range fills {
+		// Only include fills for the requested symbol
+		if fill.Coin != symbol {
+			continue
+		}
+
+		if len(trades) >= limit {
+			break
+		}
+
+		price := parseDecimal(fill.Price)
+		quantity := parseDecimal(fill.Size)
+
+		// Determine side from fill.Side ("A" = ask/sell, "B" = bid/buy)
+		var side connector.OrderSide
+		if fill.Side == "B" {
+			side = connector.OrderSideBuy
+		} else {
+			side = connector.OrderSideSell
+		}
+
+		trades = append(trades, connector.Trade{
+			ID:        fmt.Sprintf("%d", fill.Oid),
+			OrderID:   fmt.Sprintf("%d", fill.Oid),
+			Symbol:    fill.Coin,
+			Side:      side,
+			Price:     price,
+			Quantity:  quantity,
+			Fee:       numerical.Zero(),             // Hyperliquid doesn't provide fee in Fill
+			Timestamp: time.Unix(fill.Time/1000, 0), // Convert milliseconds to seconds
+			IsMaker:   false,                        // Can't determine from Fill struct
+		})
+	}
+
+	return trades, nil
 }
