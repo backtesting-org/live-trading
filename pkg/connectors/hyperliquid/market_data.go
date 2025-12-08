@@ -146,7 +146,7 @@ func (h *hyperliquid) FetchOrderBook(symbol portfolio.Asset, instrument connecto
 }
 
 func (h *hyperliquid) GetPerpSymbol(symbol portfolio.Asset) string {
-	return symbol.Symbol() + "-USD"
+	return symbol.Symbol()
 
 }
 

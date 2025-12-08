@@ -2,13 +2,22 @@ package connector_test
 
 import (
 	"os"
+	"path/filepath"
 
 	"github.com/backtesting-org/kronos-sdk/pkg/types/connector"
 	"github.com/backtesting-org/live-trading/pkg/connectors/bybit"
 	"github.com/backtesting-org/live-trading/pkg/connectors/hyperliquid"
 	"github.com/backtesting-org/live-trading/pkg/connectors/paradex"
 	"github.com/backtesting-org/live-trading/pkg/connectors/types"
+	"github.com/joho/godotenv"
 )
+
+func init() {
+	// Try to load .env file from the test directory
+	// Ignore errors if file doesn't exist (env vars may be set directly)
+	envPath := filepath.Join(".", ".env")
+	_ = godotenv.Load(envPath)
+}
 
 // ========================================
 // TEST CONFIGURATION - EDIT HERE
