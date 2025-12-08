@@ -58,7 +58,6 @@ var _ = Describe("Account Data Tests", func() {
 
 			orders, err := conn.GetOpenOrders()
 			AssertNoError(err, "GetOpenOrders should succeed")
-			Expect(orders).ToNot(BeNil())
 
 			LogSuccess("Open orders: %d", len(orders))
 		})

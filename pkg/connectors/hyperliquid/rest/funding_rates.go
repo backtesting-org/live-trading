@@ -1,7 +1,11 @@
 package rest
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 
 	"github.com/sonirico/go-hyperliquid"
 )
@@ -16,66 +20,94 @@ type AssetContext struct {
 	OpenInterest string
 }
 
+// universeItem represents a single asset in the universe array
+type universeItem struct {
+	Name         string `json:"name"`
+	SzDecimals   int    `json:"szDecimals"`
+	MaxLeverage  int    `json:"maxLeverage"`
+	OnlyIsolated bool   `json:"onlyIsolated,omitempty"`
+}
+
+// assetCtxItem represents a single asset context with funding data
+type assetCtxItem struct {
+	Funding      string   `json:"funding"`
+	MarkPx       string   `json:"markPx"`
+	OraclePx     string   `json:"oraclePx"`
+	Premium      string   `json:"premium"`
+	OpenInterest string   `json:"openInterest"`
+	MidPx        string   `json:"midPx,omitempty"`
+	DayNtlVlm    string   `json:"dayNtlVlm,omitempty"`
+	PrevDayPx    string   `json:"prevDayPx,omitempty"`
+	ImpactPxs    []string `json:"impactPxs,omitempty"`
+}
+
+// metaObject represents the first element of the API response
+type metaObject struct {
+	Universe []universeItem `json:"universe"`
+}
+
+func (m *marketDataService) fetchMetaAndAssetCtxs() ([]universeItem, []assetCtxItem, error) {
+	reqBody := map[string]string{"type": "metaAndAssetCtxs"}
+	jsonData, _ := json.Marshal(reqBody)
+
+	// Make direct HTTP call
+	resp, err := http.Post("https://api.hyperliquid.xyz/info", "application/json", bytes.NewBuffer(jsonData))
+	if err != nil {
+		return nil, nil, fmt.Errorf("HTTP request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to read response: %w", err)
+	}
+
+	// API returns: [{"universe": [...], ...}, [{...}, {...}]]
+	// Parse as raw JSON array first
+	var rawResponse []json.RawMessage
+	if err := json.Unmarshal(body, &rawResponse); err != nil {
+		return nil, nil, fmt.Errorf("failed to unmarshal response: %w", err)
+	}
+
+	if len(rawResponse) < 2 {
+		return nil, nil, fmt.Errorf("invalid response: expected 2 elements, got %d", len(rawResponse))
+	}
+
+	// First element is an object with "universe" key
+	var metaObj metaObject
+	if err := json.Unmarshal(rawResponse[0], &metaObj); err != nil {
+		return nil, nil, fmt.Errorf("failed to unmarshal meta object: %w", err)
+	}
+
+	// Second element is array of asset contexts
+	var assetCtxs []assetCtxItem
+	if err := json.Unmarshal(rawResponse[1], &assetCtxs); err != nil {
+		return nil, nil, fmt.Errorf("failed to unmarshal asset contexts: %w", err)
+	}
+
+	return metaObj.Universe, assetCtxs, nil
+}
+
 // GetAssetContext returns the asset context for a specific coin
 func (m *marketDataService) GetAssetContext(coin string) (*AssetContext, error) {
-	info, err := m.client.GetInfo()
+	universe, assetCtxs, err := m.fetchMetaAndAssetCtxs()
 	if err != nil {
-		return nil, fmt.Errorf("info client not configured: %w", err)
+		return nil, fmt.Errorf("failed to fetch meta and asset contexts: %w", err)
 	}
 
-	metaAndCtx, err := info.MetaAndAssetCtxs()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get asset contexts: %w", err)
-	}
-
-	if len(metaAndCtx) < 2 {
-		return nil, fmt.Errorf("invalid response format")
-	}
-
-	universeData, ok := metaAndCtx["universe"].([]interface{})
-	if !ok {
-		return nil, fmt.Errorf("invalid universe data")
-	}
-
-	assetCtxs, ok := metaAndCtx["assetCtxs"].([]interface{})
-	if !ok {
-		return nil, fmt.Errorf("invalid asset contexts")
-	}
-
-	for i := 0; i < len(universeData) && i < len(assetCtxs); i++ {
-		assetInfo, ok := universeData[i].(map[string]interface{})
-		if !ok {
+	for i := 0; i < len(universe) && i < len(assetCtxs); i++ {
+		if universe[i].Name != coin {
 			continue
 		}
 
-		name, ok := assetInfo["name"].(string)
-		if !ok || name != coin {
-			continue
-		}
-
-		ctx, ok := assetCtxs[i].(map[string]interface{})
-		if !ok {
-			return nil, fmt.Errorf("invalid context for asset %s", coin)
-		}
-
-		fundingStr, okFunding := ctx["funding"].(string)
-		markPxStr, okMark := ctx["markPx"].(string)
-		oraclePxStr, okOracle := ctx["oraclePx"].(string)
-		premiumStr, okPremium := ctx["premium"].(string)
-		openInterestStr, okOI := ctx["openInterest"].(string)
-
-		if !okFunding || !okMark || !okOracle || !okPremium || !okOI {
-			return nil, fmt.Errorf("missing required fields for asset %s (funding=%v, mark=%v, oracle=%v, premium=%v, oi=%v)",
-				coin, okFunding, okMark, okOracle, okPremium, okOI)
-		}
-
+		ctx := assetCtxs[i]
 		return &AssetContext{
-			Name:         name,
-			Funding:      fundingStr,
-			MarkPrice:    markPxStr,
-			OraclePrice:  oraclePxStr,
-			Premium:      premiumStr,
-			OpenInterest: openInterestStr,
+			Name:         universe[i].Name,
+			Funding:      ctx.Funding,
+			MarkPrice:    ctx.MarkPx,
+			OraclePrice:  ctx.OraclePx,
+			Premium:      ctx.Premium,
+			OpenInterest: ctx.OpenInterest,
 		}, nil
 	}
 
@@ -84,66 +116,22 @@ func (m *marketDataService) GetAssetContext(coin string) (*AssetContext, error) 
 
 // GetAllAssetContexts returns asset contexts for all assets
 func (m *marketDataService) GetAllAssetContexts() ([]AssetContext, error) {
-	info, err := m.client.GetInfo()
+	universe, assetCtxs, err := m.fetchMetaAndAssetCtxs()
 	if err != nil {
-		return nil, fmt.Errorf("info client not configured: %w", err)
-	}
-
-	metaAndCtx, err := info.MetaAndAssetCtxs()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get asset contexts: %w", err)
-	}
-
-	if len(metaAndCtx) < 2 {
-		return nil, fmt.Errorf("invalid response format")
-	}
-
-	universeData, ok := metaAndCtx["universe"].([]interface{})
-	if !ok {
-		return nil, fmt.Errorf("invalid universe data")
-	}
-
-	assetCtxs, ok := metaAndCtx["assetCtxs"].([]interface{})
-	if !ok {
-		return nil, fmt.Errorf("invalid asset contexts")
+		return nil, fmt.Errorf("failed to fetch meta and asset contexts: %w", err)
 	}
 
 	var contexts []AssetContext
 
-	for i := 0; i < len(universeData) && i < len(assetCtxs); i++ {
-		assetInfo, ok := universeData[i].(map[string]interface{})
-		if !ok {
-			continue
-		}
-
-		name, ok := assetInfo["name"].(string)
-		if !ok {
-			continue
-		}
-
-		ctx, ok := assetCtxs[i].(map[string]interface{})
-		if !ok {
-			continue
-		}
-
-		fundingStr, okFunding := ctx["funding"].(string)
-		markPxStr, okMark := ctx["markPx"].(string)
-		oraclePxStr, okOracle := ctx["oraclePx"].(string)
-		premiumStr, okPremium := ctx["premium"].(string)
-		openInterestStr, okOI := ctx["openInterest"].(string)
-
-		if !okFunding || !okMark || !okOracle || !okPremium || !okOI {
-			// Skip assets with incomplete data rather than failing
-			continue
-		}
-
+	for i := 0; i < len(universe) && i < len(assetCtxs); i++ {
+		ctx := assetCtxs[i]
 		contexts = append(contexts, AssetContext{
-			Name:         name,
-			Funding:      fundingStr,
-			MarkPrice:    markPxStr,
-			OraclePrice:  oraclePxStr,
-			Premium:      premiumStr,
-			OpenInterest: openInterestStr,
+			Name:         universe[i].Name,
+			Funding:      ctx.Funding,
+			MarkPrice:    ctx.MarkPx,
+			OraclePrice:  ctx.OraclePx,
+			Premium:      ctx.Premium,
+			OpenInterest: ctx.OpenInterest,
 		})
 	}
 
