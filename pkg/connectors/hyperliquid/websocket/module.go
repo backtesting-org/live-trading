@@ -97,8 +97,9 @@ func NewConnectionManager(
 	authManager security.AuthManager,
 	metrics performance.Metrics,
 	logger logging.ApplicationLogger,
+	dialer connection.WebSocketDialer,
 ) connection.ConnectionManager {
-	return connection.NewConnectionManager(config, authManager, metrics, logger)
+	return connection.NewConnectionManager(config, authManager, metrics, logger, dialer)
 }
 
 // NewReconnectionStrategy creates reconnection strategy
@@ -187,11 +188,18 @@ var WebSocketModule = fx.Module("hyperliquid_websocket",
 			fx.ResultTags(`name:"hyperliquid_connection_config"`),
 		),
 		fx.Annotate(
+			connection.NewGorillaDialer, // Provide dialer
+			fx.ParamTags(`name:"hyperliquid_connection_config"`),
+			fx.ResultTags(`name:"hyperliquid_dialer"`),
+		),
+		fx.Annotate(
 			NewConnectionManager,
 			fx.ParamTags(
 				`name:"hyperliquid_connection_config"`,
 				`name:"hyperliquid_auth_manager"`,
 				`name:"hyperliquid_metrics"`,
+				``,                          // logger (no tag)
+				`name:"hyperliquid_dialer"`, // Inject dialer
 			),
 			fx.ResultTags(`name:"hyperliquid_connection_manager"`),
 		),

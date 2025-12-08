@@ -22,6 +22,7 @@ const (
 	StateConnected
 	StateReconnecting
 	StateFailed
+	StateStopped // User commanded stop - final state, never reconnect
 )
 
 func (cs ConnectionState) String() string {
@@ -36,6 +37,8 @@ func (cs ConnectionState) String() string {
 		return "reconnecting"
 	case StateFailed:
 		return "failed"
+	case StateStopped:
+		return "stopped"
 	default:
 		return "unknown"
 	}
@@ -48,13 +51,19 @@ type connectionManager struct {
 	metrics        performance.Metrics
 	circuitBreaker performance.CircuitBreaker
 	logger         logging.ApplicationLogger
+	dialer         WebSocketDialer // Abstracted for testability
 
-	conn       *websocket.Conn
+	conn       WebSocketConn
 	state      ConnectionState
 	stateMutex sync.RWMutex
 
 	ctx    context.Context
 	cancel context.CancelFunc
+
+	// Goroutine lifecycle management
+	stopCh   chan struct{}  // Closed when user commands disconnect
+	stopOnce sync.Once      // Ensures stopCh only closed once
+	wg       sync.WaitGroup // Tracks all goroutines
 
 	lastActivity  time.Time
 	activityMutex sync.RWMutex
@@ -70,6 +79,7 @@ func NewConnectionManager(
 	authManager security.AuthManager,
 	metrics performance.Metrics,
 	logger logging.ApplicationLogger,
+	dialer WebSocketDialer,
 ) ConnectionManager {
 	return &connectionManager{
 		config:         config,
@@ -77,7 +87,9 @@ func NewConnectionManager(
 		metrics:        metrics,
 		circuitBreaker: performance.NewCircuitBreaker(3, 30*time.Second),
 		logger:         logger,
+		dialer:         dialer,
 		state:          StateDisconnected,
+		stopCh:         make(chan struct{}),
 	}
 }
 
@@ -124,47 +136,20 @@ func (cm *connectionManager) doConnect() error {
 		return fmt.Errorf("failed to get auth headers: %w", err)
 	}
 
-	dialer := &websocket.Dialer{
-		HandshakeTimeout: cm.config.HandshakeTimeout,
-		ReadBufferSize:   cm.config.ReadBufferSize,
-		WriteBufferSize:  cm.config.WriteBufferSize,
-	}
-
 	connectCtx, cancel := context.WithTimeout(cm.ctx, cm.config.ConnectTimeout)
 	defer cancel()
 
-	conn, _, err := dialer.DialContext(connectCtx, u.String(), headers)
+	// Use injected dialer interface
+	conn, _, err := cm.dialer.DialContext(connectCtx, u.String(), headers)
 	if err != nil {
 		cm.setState(StateFailed)
 		return fmt.Errorf("failed to connect to WebSocket: %w", err)
 	}
 
-	// Set up standard WebSocket ping/pong handlers
-	conn.SetReadLimit(cm.config.MaxMessageSize)
-	conn.SetReadDeadline(time.Now().Add(cm.config.ReadTimeout))
-
-	// Handle pings from server - respond with pongs
-	conn.SetPingHandler(func(appData string) error {
-		cm.logger.Debug("📥 Received WebSocket ping from server")
-
-		err := conn.WriteControl(websocket.PongMessage, []byte(appData),
-			time.Now().Add(5*time.Second))
-
-		if err != nil {
-			cm.logger.Debug("Failed to send pong: %v", err)
-		} else {
-			cm.logger.Debug("📤 Sent WebSocket pong response")
-		}
-		return err
-	})
-
-	// Handle pongs from server
-	conn.SetPongHandler(func(appData string) error {
-		cm.logger.Debug("✅ Received WebSocket pong from server")
-		cm.updateLastActivity()
-		conn.SetReadDeadline(time.Now().Add(cm.config.ReadTimeout))
-		return nil
-	})
+	// Set read timeout
+	if err := conn.SetReadDeadline(time.Now().Add(cm.config.ReadTimeout)); err != nil {
+		return fmt.Errorf("failed to set read deadline: %w", err)
+	}
 
 	cm.conn = conn
 	cm.setState(StateConnected)
@@ -191,29 +176,40 @@ func (cm *connectionManager) doConnect() error {
 
 func (cm *connectionManager) Disconnect() error {
 	cm.stateMutex.Lock()
-	defer cm.stateMutex.Unlock()
 
-	if cm.state == StateDisconnected {
+	// If already stopped, just return
+	if cm.state == StateStopped {
+		cm.stateMutex.Unlock()
 		return nil
 	}
 
-	cm.setState(StateDisconnected)
+	// Set state to Stopped (user commanded - never reconnect)
+	cm.setState(StateStopped)
+	cm.stateMutex.Unlock()
 
+	cm.logger.Info("User commanded disconnect - stopping all goroutines")
+
+	// Signal all goroutines to stop
+	cm.stopOnce.Do(func() {
+		close(cm.stopCh)
+	})
+
+	// Cancel context
 	if cm.cancel != nil {
 		cm.cancel()
 	}
 
+	// Close connection
 	var err error
 	if cm.conn != nil {
 		err = cm.conn.Close()
 		cm.conn = nil
 	}
 
-	if cm.onDisconnect != nil {
-		cm.onDisconnect()
-	}
+	// Wait for all goroutines to exit
+	cm.wg.Wait()
 
-	cm.logger.Info("WebSocket disconnected")
+	cm.logger.Info("WebSocket disconnected by user - all goroutines stopped")
 	return err
 }
 
@@ -257,7 +253,7 @@ func (cm *connectionManager) SendJSON(v interface{}) error {
 		return fmt.Errorf("failed to set write deadline: %w", err)
 	}
 
-	return cm.conn.WriteJSON(v)
+	return cm.conn.WriteMessage(websocket.TextMessage, data)
 }
 
 func (cm *connectionManager) SendPing() error {
@@ -331,57 +327,57 @@ func (cm *connectionManager) updateLastActivity() {
 }
 
 func (cm *connectionManager) readMessages() {
+	cm.wg.Add(1)
+	defer cm.wg.Done()
+
 	defer func() {
 		if r := recover(); r != nil {
-			cm.logger.Error("🔥 WebSocket read panic: %v", r)
-			cm.handleConnectionError()
+			cm.logger.Error("WebSocket read panic: %v", r)
+			if cm.GetState() != StateStopped {
+				cm.handleConnectionError()
+			}
 		}
 	}()
 
-	messageCount := 0
-	cm.logger.Info("🚀 Starting readMessages loop for %s", cm.config.URL)
-
-	// Use context-based cancellation instead of read timeouts
-	// This keeps the connection alive while waiting for messages
 	for {
 		select {
+		case <-cm.stopCh:
+			cm.logger.Info("Read loop stopping - user disconnect")
+			return
 		case <-cm.ctx.Done():
-			cm.logger.Error("❌ WebSocket read loop CANCELLED BY CONTEXT (received %d messages before cancel)", messageCount)
+			cm.logger.Debug("Read loop cancelled by context")
 			return
 		default:
 		}
 
-		if cm.GetState() != StateConnected {
-			cm.logger.Debug("⏸️  State is %s, sleeping 100ms", cm.GetState().String())
-			time.Sleep(100 * time.Millisecond)
-			continue
-		}
-
-		// Set a long read deadline mainly for detecting truly dead connections
-		// NOT for timing out while waiting for data
-		// The health monitor will detect stale connections separately
-		if err := cm.conn.SetReadDeadline(time.Now().Add(5 * time.Minute)); err != nil {
-			cm.logger.Error("❌ Failed to set read deadline: %v (after %d messages)", err, messageCount)
-			cm.handleConnectionError()
+		if cm.GetState() == StateStopped {
 			return
 		}
 
+		if cm.conn == nil {
+			cm.logger.Debug("Connection is nil, exiting read loop")
+			return
+		}
+
+		cm.conn.SetReadDeadline(time.Now().Add(5 * time.Minute))
 		_, message, err := cm.conn.ReadMessage()
 
 		if err != nil {
+			if cm.GetState() == StateStopped {
+				cm.logger.Debug("Expected read error after user disconnect")
+				return
+			}
+
 			if websocket.IsCloseError(err, websocket.CloseNormalClosure, websocket.CloseGoingAway) {
-				cm.logger.Info("⚠️  WebSocket closed normally by server (received %d messages)", messageCount)
+				cm.logger.Info("WebSocket closed normally by server")
 			} else {
-				cm.logger.Error("❌ WebSocket read error after %d messages: %v (type: %T)", messageCount, err, err)
+				cm.logger.Error("WebSocket read error: %v", err)
 			}
 
 			cm.handleConnectionError()
 			return
 		}
 
-		messageCount++
-
-		// Update activity on any message received
 		cm.updateLastActivity()
 
 		if cm.metrics != nil {
@@ -389,20 +385,20 @@ func (cm *connectionManager) readMessages() {
 		}
 
 		if cm.onMessage != nil {
-			cm.logger.Debug("📥 Message #%d: Calling onMessage callback...", messageCount)
 			if err := cm.onMessage(message); err != nil {
-				cm.logger.Debug("⚠️  Message #%d handler error: %v", messageCount, err)
+				cm.logger.Debug("Message handler error: %v", err)
 				if cm.onError != nil {
 					cm.onError(fmt.Errorf("message processing error: %w", err))
 				}
 			}
-			cm.logger.Debug("📥 Message #%d: onMessage callback complete", messageCount)
 		}
 	}
 }
 
-// Optional simple health monitoring (non-aggressive)
 func (cm *connectionManager) simpleHealthMonitor() {
+	cm.wg.Add(1)
+	defer cm.wg.Done()
+
 	ticker := time.NewTicker(cm.config.HealthCheckInterval)
 	defer ticker.Stop()
 
@@ -410,10 +406,17 @@ func (cm *connectionManager) simpleHealthMonitor() {
 
 	for {
 		select {
+		case <-cm.stopCh:
+			cm.logger.Debug("Health monitor stopping - user disconnect")
+			return
 		case <-cm.ctx.Done():
 			cm.logger.Debug("Health monitor cancelled by context")
 			return
 		case <-ticker.C:
+			if cm.GetState() == StateStopped {
+				return
+			}
+
 			if cm.GetState() != StateConnected {
 				cm.logger.Debug("Health check: not connected")
 				return
@@ -430,7 +433,9 @@ func (cm *connectionManager) simpleHealthMonitor() {
 				if cm.config.EnableHealthPings {
 					if err := cm.SendPing(); err != nil {
 						cm.logger.Debug("Health ping failed: %v", err)
-						cm.handleConnectionError()
+						if cm.GetState() != StateStopped {
+							cm.handleConnectionError()
+						}
 						return
 					}
 				}
@@ -443,11 +448,17 @@ func (cm *connectionManager) simpleHealthMonitor() {
 
 func (cm *connectionManager) handleConnectionError() {
 	cm.stateMutex.Lock()
-	previousState := cm.state
+
+	if cm.state == StateStopped {
+		cm.stateMutex.Unlock()
+		cm.logger.Debug("Ignoring connection error - user commanded disconnect")
+		return
+	}
+
 	cm.setState(StateDisconnected)
 	cm.stateMutex.Unlock()
 
-	cm.logger.Error("❌ WebSocket connection error detected (was %s, now disconnected)", previousState.String())
+	cm.logger.Error("WebSocket connection error - transitioning to disconnected state")
 
 	if cm.conn != nil {
 		cm.conn.Close()
