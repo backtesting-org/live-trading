@@ -139,7 +139,6 @@ func (cm *connectionManager) doConnect() error {
 	connectCtx, cancel := context.WithTimeout(cm.ctx, cm.config.ConnectTimeout)
 	defer cancel()
 
-	// Use injected dialer interface
 	conn, _, err := cm.dialer.DialContext(connectCtx, u.String(), headers)
 	if err != nil {
 		cm.setState(StateFailed)
