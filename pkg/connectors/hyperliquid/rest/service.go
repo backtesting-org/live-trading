@@ -31,8 +31,8 @@ type TradingService interface {
 	CloseEntirePosition(coin string, slippage float64) (hyperliquid.OrderStatus, error)
 
 	// Cancel operations
-	CancelOrderByID(coin string, orderID int64) (*hyperliquid.APIResponse[hyperliquid.CancelResponse], error)
-	CancelOrderByCustomRef(coin, customRef string) (*hyperliquid.APIResponse[hyperliquid.CancelResponse], error)
+	CancelOrderByID(coin string, orderID int64) (*hyperliquid.APIResponse[hyperliquid.CancelOrderResponse], error)
+	CancelOrderByCustomRef(coin, customRef string) (*hyperliquid.APIResponse[hyperliquid.CancelOrderResponse], error)
 }
 
 // tradingService implementation
