@@ -44,7 +44,10 @@ func (h *hyperliquid) StopWebSocket() error {
 
 // IsWebSocketConnected returns whether the WebSocket is connected
 func (h *hyperliquid) IsWebSocketConnected() bool {
-	return h.initialized && h.realTime != nil
+	if !h.initialized || h.realTime == nil {
+		return false
+	}
+	return h.realTime.IsConnected()
 }
 
 // GetOrderBookChannels returns all active orderbook channels

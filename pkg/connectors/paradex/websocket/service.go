@@ -52,7 +52,9 @@ func NewService(
 	connConfig := connection.TradingConfig(webSocketURL)
 	authManager := security.NewAuthManager(&ParadexAuthProvider{client: client}, logger)
 	metrics := performance.NewMetrics()
-	connectionManager := connection.NewConnectionManager(connConfig, authManager, metrics, logger)
+	dialer := connection.NewGorillaDialer(connConfig)
+
+	connectionManager := connection.NewConnectionManager(connConfig, authManager, metrics, logger, dialer)
 	reconnectStrategy := connection.NewExponentialBackoffStrategy(5*time.Second, 5*time.Minute, 10)
 	reconnectManager := connection.NewReconnectManager(connectionManager, reconnectStrategy, logger)
 	handlerRegistry := base.NewHandlerRegistry(logger)

@@ -188,6 +188,12 @@ func (rm *reconnectManager) attemptReconnection(ctx context.Context) error {
 			rm.logger.Error("❌ Reconnection attempt CANCELLED BY CONTEXT after %d attempts", rm.currentAttempt)
 			return fmt.Errorf("context cancelled")
 		default:
+			// Check if user commanded stop before attempting reconnect
+			if rm.connectionManager.GetState() == StateStopped {
+				rm.logger.Info("🛑 StateStopped detected during reconnection - user commanded disconnect")
+				return fmt.Errorf("user commanded disconnect")
+			}
+
 			rm.currentAttempt++
 
 			if rm.currentAttempt > rm.strategy.MaxAttempts() {
