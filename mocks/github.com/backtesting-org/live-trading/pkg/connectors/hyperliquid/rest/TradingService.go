@@ -21,23 +21,23 @@ func (_m *TradingService) EXPECT() *TradingService_Expecter {
 }
 
 // CancelOrderByCustomRef provides a mock function with given fields: coin, customRef
-func (_m *TradingService) CancelOrderByCustomRef(coin string, customRef string) (*hyperliquid.APIResponse[hyperliquid.CancelResponse], error) {
+func (_m *TradingService) CancelOrderByCustomRef(coin string, customRef string) (*hyperliquid.APIResponse[hyperliquid.CancelOrderResponse], error) {
 	ret := _m.Called(coin, customRef)
 
 	if len(ret) == 0 {
 		panic("no return value specified for CancelOrderByCustomRef")
 	}
 
-	var r0 *hyperliquid.APIResponse[hyperliquid.CancelResponse]
+	var r0 *hyperliquid.APIResponse[hyperliquid.CancelOrderResponse]
 	var r1 error
-	if rf, ok := ret.Get(0).(func(string, string) (*hyperliquid.APIResponse[hyperliquid.CancelResponse], error)); ok {
+	if rf, ok := ret.Get(0).(func(string, string) (*hyperliquid.APIResponse[hyperliquid.CancelOrderResponse], error)); ok {
 		return rf(coin, customRef)
 	}
-	if rf, ok := ret.Get(0).(func(string, string) *hyperliquid.APIResponse[hyperliquid.CancelResponse]); ok {
+	if rf, ok := ret.Get(0).(func(string, string) *hyperliquid.APIResponse[hyperliquid.CancelOrderResponse]); ok {
 		r0 = rf(coin, customRef)
 	} else {
 		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(*hyperliquid.APIResponse[hyperliquid.CancelResponse])
+			r0 = ret.Get(0).(*hyperliquid.APIResponse[hyperliquid.CancelOrderResponse])
 		}
 	}
 
@@ -69,34 +69,34 @@ func (_c *TradingService_CancelOrderByCustomRef_Call) Run(run func(coin string, 
 	return _c
 }
 
-func (_c *TradingService_CancelOrderByCustomRef_Call) Return(_a0 *hyperliquid.APIResponse[hyperliquid.CancelResponse], _a1 error) *TradingService_CancelOrderByCustomRef_Call {
+func (_c *TradingService_CancelOrderByCustomRef_Call) Return(_a0 *hyperliquid.APIResponse[hyperliquid.CancelOrderResponse], _a1 error) *TradingService_CancelOrderByCustomRef_Call {
 	_c.Call.Return(_a0, _a1)
 	return _c
 }
 
-func (_c *TradingService_CancelOrderByCustomRef_Call) RunAndReturn(run func(string, string) (*hyperliquid.APIResponse[hyperliquid.CancelResponse], error)) *TradingService_CancelOrderByCustomRef_Call {
+func (_c *TradingService_CancelOrderByCustomRef_Call) RunAndReturn(run func(string, string) (*hyperliquid.APIResponse[hyperliquid.CancelOrderResponse], error)) *TradingService_CancelOrderByCustomRef_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
 // CancelOrderByID provides a mock function with given fields: coin, orderID
-func (_m *TradingService) CancelOrderByID(coin string, orderID int64) (*hyperliquid.APIResponse[hyperliquid.CancelResponse], error) {
+func (_m *TradingService) CancelOrderByID(coin string, orderID int64) (*hyperliquid.APIResponse[hyperliquid.CancelOrderResponse], error) {
 	ret := _m.Called(coin, orderID)
 
 	if len(ret) == 0 {
 		panic("no return value specified for CancelOrderByID")
 	}
 
-	var r0 *hyperliquid.APIResponse[hyperliquid.CancelResponse]
+	var r0 *hyperliquid.APIResponse[hyperliquid.CancelOrderResponse]
 	var r1 error
-	if rf, ok := ret.Get(0).(func(string, int64) (*hyperliquid.APIResponse[hyperliquid.CancelResponse], error)); ok {
+	if rf, ok := ret.Get(0).(func(string, int64) (*hyperliquid.APIResponse[hyperliquid.CancelOrderResponse], error)); ok {
 		return rf(coin, orderID)
 	}
-	if rf, ok := ret.Get(0).(func(string, int64) *hyperliquid.APIResponse[hyperliquid.CancelResponse]); ok {
+	if rf, ok := ret.Get(0).(func(string, int64) *hyperliquid.APIResponse[hyperliquid.CancelOrderResponse]); ok {
 		r0 = rf(coin, orderID)
 	} else {
 		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(*hyperliquid.APIResponse[hyperliquid.CancelResponse])
+			r0 = ret.Get(0).(*hyperliquid.APIResponse[hyperliquid.CancelOrderResponse])
 		}
 	}
 
@@ -128,12 +128,12 @@ func (_c *TradingService_CancelOrderByID_Call) Run(run func(coin string, orderID
 	return _c
 }
 
-func (_c *TradingService_CancelOrderByID_Call) Return(_a0 *hyperliquid.APIResponse[hyperliquid.CancelResponse], _a1 error) *TradingService_CancelOrderByID_Call {
+func (_c *TradingService_CancelOrderByID_Call) Return(_a0 *hyperliquid.APIResponse[hyperliquid.CancelOrderResponse], _a1 error) *TradingService_CancelOrderByID_Call {
 	_c.Call.Return(_a0, _a1)
 	return _c
 }
 
-func (_c *TradingService_CancelOrderByID_Call) RunAndReturn(run func(string, int64) (*hyperliquid.APIResponse[hyperliquid.CancelResponse], error)) *TradingService_CancelOrderByID_Call {
+func (_c *TradingService_CancelOrderByID_Call) RunAndReturn(run func(string, int64) (*hyperliquid.APIResponse[hyperliquid.CancelOrderResponse], error)) *TradingService_CancelOrderByID_Call {
 	_c.Call.Return(run)
 	return _c
 }
