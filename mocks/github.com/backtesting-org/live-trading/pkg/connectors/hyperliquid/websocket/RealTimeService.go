@@ -157,6 +157,51 @@ func (_c *RealTimeService_GetErrorChannel_Call) RunAndReturn(run func() <-chan e
 	return _c
 }
 
+// IsConnected provides a mock function with no fields
+func (_m *RealTimeService) IsConnected() bool {
+	ret := _m.Called()
+
+	if len(ret) == 0 {
+		panic("no return value specified for IsConnected")
+	}
+
+	var r0 bool
+	if rf, ok := ret.Get(0).(func() bool); ok {
+		r0 = rf()
+	} else {
+		r0 = ret.Get(0).(bool)
+	}
+
+	return r0
+}
+
+// RealTimeService_IsConnected_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'IsConnected'
+type RealTimeService_IsConnected_Call struct {
+	*mock.Call
+}
+
+// IsConnected is a helper method to define mock.On call
+func (_e *RealTimeService_Expecter) IsConnected() *RealTimeService_IsConnected_Call {
+	return &RealTimeService_IsConnected_Call{Call: _e.mock.On("IsConnected")}
+}
+
+func (_c *RealTimeService_IsConnected_Call) Run(run func()) *RealTimeService_IsConnected_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run()
+	})
+	return _c
+}
+
+func (_c *RealTimeService_IsConnected_Call) Return(_a0 bool) *RealTimeService_IsConnected_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *RealTimeService_IsConnected_Call) RunAndReturn(run func() bool) *RealTimeService_IsConnected_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // SubscribeToAccountBalance provides a mock function with given fields: user, callback
 func (_m *RealTimeService) SubscribeToAccountBalance(user string, callback func(*websocket.AccountBalanceMessage)) (int, error) {
 	ret := _m.Called(user, callback)
