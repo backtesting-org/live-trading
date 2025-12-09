@@ -33,7 +33,7 @@ const (
 	testInstrumentType = connector.TypePerpetual
 
 	// Enable trading tests (DANGEROUS - only on testnet)
-	enableTradingTests = false
+	enableTradingTests = true
 )
 
 // ========================================
@@ -54,12 +54,24 @@ func getConnectorConfig(name connector.ExchangeName) connector.Config {
 }
 
 func getHyperliquidConfig() connector.Config {
+	useTestnet := getEnv("HYPERLIQUID_TESTNET", "true") == "true"
+
+	var baseURL string
+	if envURL := os.Getenv("HYPERLIQUID_BASE_URL"); envURL != "" {
+		baseURL = envURL
+	} else if useTestnet {
+		baseURL = "https://api.hyperliquid-testnet.xyz"
+	} else {
+		baseURL = "https://api.hyperliquid.xyz"
+		println("⚠️  WARNING: Using Hyperliquid MAINNET - real money at risk!")
+	}
+
 	return &hyperliquid.Config{
-		BaseURL:        getEnv("HYPERLIQUID_BASE_URL", "https://api.hyperliquid.xyz"),
+		BaseURL:        baseURL,
 		AccountAddress: mustGetEnv("HYPERLIQUID_ACCOUNT_ADDRESS"),
 		PrivateKey:     mustGetEnv("HYPERLIQUID_PRIVATE_KEY"),
 		VaultAddress:   getEnv("HYPERLIQUID_VAULT_ADDRESS", ""),
-		UseTestnet:     getEnv("HYPERLIQUID_TESTNET", "false") == "true",
+		UseTestnet:     useTestnet,
 	}
 }
 
