@@ -10,6 +10,7 @@ import (
 type RealTimeService interface {
 	Connect() error
 	Disconnect() error
+	IsConnected() bool
 	GetErrorChannel() <-chan error
 
 	// Orderbook subscriptions
