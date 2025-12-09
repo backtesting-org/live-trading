@@ -42,7 +42,11 @@ var _ = Describe("Trading Operations Tests", Label("trading"), func() {
 
 			// Place order far from market to avoid fill
 			limitPrice := priceResp.Price.Mul(numerical.NewFromFloat(0.5))
-			qty := numerical.NewFromFloat(0.001)
+
+			minOrderValue := 10.0
+			price := limitPrice.InexactFloat64()
+			minQty := minOrderValue / price
+			qty := numerical.NewFromFloat(minQty * 1.1) // Add 10% buffer
 
 			order, err := conn.PlaceLimitOrder(perpSymbol, connector.OrderSideBuy, qty, limitPrice)
 			AssertNoError(err, "PlaceLimitOrder should succeed")
@@ -70,7 +74,12 @@ var _ = Describe("Trading Operations Tests", Label("trading"), func() {
 			AssertNoError(err, "FetchPrice should succeed")
 
 			limitPrice := priceResp.Price.Mul(numerical.NewFromFloat(0.5))
-			qty := numerical.NewFromFloat(0.001)
+
+			// Calculate minimum quantity to meet $10 order value requirement
+			minOrderValue := 10.0
+			price := limitPrice.InexactFloat64()
+			minQty := minOrderValue / price
+			qty := numerical.NewFromFloat(minQty * 1.1) // Add 10% buffer
 
 			order, err := conn.PlaceLimitOrder(perpSymbol, connector.OrderSideBuy, qty, limitPrice)
 			AssertNoError(err, "PlaceLimitOrder should succeed")

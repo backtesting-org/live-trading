@@ -27,7 +27,7 @@ const (
 	testConnectorName = types.Hyperliquid // Change to types.Paradex or types.Bybit
 
 	// Test asset
-	testSymbol = "BTC"
+	testSymbol = "ETH"
 
 	// Test instrument type
 	testInstrumentType = connector.TypePerpetual

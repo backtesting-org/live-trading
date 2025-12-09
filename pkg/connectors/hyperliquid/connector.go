@@ -100,6 +100,13 @@ func (h *hyperliquid) Initialize(config connector.Config) error {
 		return fmt.Errorf("failed to configure info client: %w", err)
 	}
 
+	// Initialize trading service to load asset metadata for price validation
+	if tradingService, ok := h.trading.(interface{ Initialize() error }); ok {
+		if err := tradingService.Initialize(); err != nil {
+			h.appLogger.Warn("Failed to initialize trading service price validation: %v", err)
+		}
+	}
+
 	h.config = hlConfig
 	h.initialized = true
 	h.appLogger.Info("Hyperliquid connector initialized", "base_url", hlConfig.BaseURL)

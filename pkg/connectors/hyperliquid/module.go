@@ -17,6 +17,7 @@ var Module = fx.Options(
 	fx.Provide(
 		adaptors.NewExchangeClient,
 		adaptors.NewInfoClient,
+		rest.NewPriceValidator,
 		rest.NewTradingService,
 		rest.NewMarketDataService,
 		fx.Annotate(
