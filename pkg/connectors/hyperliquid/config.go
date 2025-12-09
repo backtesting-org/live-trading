@@ -30,13 +30,10 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("account_address is required")
 	}
 
-	// Set default base URL based on network
-	if c.BaseURL == "" {
-		if c.UseTestnet {
-			c.BaseURL = "https://api.hyperliquid-testnet.xyz"
-		} else {
-			c.BaseURL = "https://api.hyperliquid.xyz"
-		}
+	if c.UseTestnet {
+		c.BaseURL = "https://api.hyperliquid-testnet.xyz"
+	} else if c.BaseURL == "" {
+		c.BaseURL = "https://api.hyperliquid.xyz"
 	}
 
 	// Set default slippage if not specified (0.5%)

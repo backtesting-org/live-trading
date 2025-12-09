@@ -37,12 +37,38 @@ type TradingService interface {
 
 // tradingService implementation
 type tradingService struct {
-	client adaptors.ExchangeClient
+	client         adaptors.ExchangeClient
+	infoClient     adaptors.InfoClient
+	priceValidator PriceValidator
 }
 
 // NewTradingService creates a new trading service
-func NewTradingService(client adaptors.ExchangeClient) TradingService {
-	return &tradingService{client: client}
+func NewTradingService(
+	client adaptors.ExchangeClient,
+	infoClient adaptors.InfoClient,
+	priceValidator PriceValidator,
+) TradingService {
+	return &tradingService{
+		client:         client,
+		infoClient:     infoClient,
+		priceValidator: priceValidator,
+	}
+}
+
+// Initialize loads asset metadata for price validation
+// This should be called after both clients are configured
+func (t *tradingService) Initialize() error {
+	info, err := t.infoClient.GetInfo()
+	if err != nil {
+		return fmt.Errorf("failed to get info client: %w", err)
+	}
+
+	meta, err := info.Meta()
+	if err != nil {
+		return fmt.Errorf("failed to get meta: %w", err)
+	}
+
+	return t.priceValidator.LoadAssetInfo(meta)
 }
 
 func (t *tradingService) ModifyOrder(orderID int64, coin string, size, price float64, isBuy bool) (hyperliquid.OrderStatus, error) {

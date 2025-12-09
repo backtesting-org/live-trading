@@ -12,7 +12,7 @@ require (
 	github.com/joho/godotenv v1.5.1
 	github.com/onsi/ginkgo/v2 v2.27.2
 	github.com/onsi/gomega v1.38.2
-	github.com/sonirico/go-hyperliquid v0.4.2
+	github.com/sonirico/go-hyperliquid v0.5.0
 	github.com/stretchr/testify v1.11.1
 	github.com/trishtzy/go-paradex v0.1.3
 	go.uber.org/fx v1.24.0
@@ -73,6 +73,7 @@ require (
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/shirou/gopsutil v3.21.4-0.20210419000835-c7a38de76ee5+incompatible // indirect
 	github.com/shopspring/decimal v1.4.0 // indirect
+	github.com/sonirico/vago v0.8.1 // indirect
 	github.com/stretchr/objx v0.5.2 // indirect
 	github.com/supranational/blst v0.3.16 // indirect
 	github.com/tklauser/go-sysconf v0.3.12 // indirect

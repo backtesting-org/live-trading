@@ -64,13 +64,27 @@ func (e *exchangeClient) Configure(baseURL, privateKey, vaultAddr, accountAddr s
 		return fmt.Errorf("invalid private key: %w", err)
 	}
 
+	// Fetch Meta and SpotMeta before creating Exchange
+	// This is required for the Exchange to map coin symbols to asset indices
+	info := hyperliquid.NewInfo(baseURL, true, nil, nil)
+
+	meta, err := info.Meta()
+	if err != nil {
+		return fmt.Errorf("failed to fetch meta: %w", err)
+	}
+
+	spotMeta, err := info.SpotMeta()
+	if err != nil {
+		return fmt.Errorf("failed to fetch spot meta: %w", err)
+	}
+
 	e.exchange = hyperliquid.NewExchange(
 		privateKeyECDSA,
 		baseURL,
-		nil, // Meta will be fetched automatically
+		meta,
 		vaultAddr,
 		accountAddr,
-		nil, // SpotMeta will be fetched automatically
+		spotMeta,
 	)
 	e.configured = true
 	return nil
