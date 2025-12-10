@@ -10,6 +10,7 @@ github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2 h1:DklsrG3d
 github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2/go.mod h1:WaHUgvxTVq04UNunO+XhnAqY/wQc+bxr74GqbsZ/Jqw=
 github.com/backtesting-org/kronos-sdk v0.0.4 h1:40twG6qWxDNdvcBj1g18jnw+wwyBo8Byq0J1/b7hGLg=
 github.com/backtesting-org/kronos-sdk v0.0.4/go.mod h1:3qP8BCU4obvgduqOBDQJy94mVQNbjUNrXSkNNe4NntI=
+github.com/backtesting-org/kronos-sdk v0.0.5/go.mod h1:3qP8BCU4obvgduqOBDQJy94mVQNbjUNrXSkNNe4NntI=
 github.com/bitly/go-simplejson v0.5.1 h1:xgwPbetQScXt1gh9BmoJ6j9JMr3TElvuIyjR8pgdoow=
 github.com/bitly/go-simplejson v0.5.1/go.mod h1:YOPVLzCfwK14b4Sff3oP1AmGhI9T9Vsg84etUnlyp+Q=
 github.com/bits-and-blooms/bitset v1.24.0 h1:H4x4TuulnokZKvHLfzVRTHJfFfnHEeSYJizujEZvmAM=
