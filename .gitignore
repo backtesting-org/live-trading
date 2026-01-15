@@ -16,7 +16,6 @@ gen
 *.so
 *.dylib
 
-.vscode
 docs
 
 # Test binary, built with `go test -c`
@@ -55,3 +54,6 @@ config/*/local.yaml
 config/**/*local*.yaml
 config/**/*.secret.yaml
 orderbooks
+branch_structure.json
+temp_auto_push.bat
+temp_interactive_push.bat
