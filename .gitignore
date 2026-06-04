@@ -2,6 +2,7 @@
 
 # IntelliJ project files
 .idea
+.vscode
 *.iml
 out
 gen
@@ -54,6 +55,3 @@ config/*/local.yaml
 config/**/*local*.yaml
 config/**/*.secret.yaml
 orderbooks
-branch_structure.json
-temp_auto_push.bat
-temp_interactive_push.bat
